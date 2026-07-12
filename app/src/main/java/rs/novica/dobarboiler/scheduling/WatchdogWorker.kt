@@ -45,6 +45,9 @@ class WatchdogWorker(
         }
 
         runCatching { container.actionLog.prune(olderThanDays = 90) }
+        // SPEC §4.2/§6.4 — hard-delete expired day_override / heat_by_time rows and trim
+        // rate samples; scheduleInputs only soft-marks them, so this is the only deleter.
+        runCatching { container.scheduleRepository.pruneExpired(now) }
 
         if (container.credentialStore.gwId == null) return Result.success()
 

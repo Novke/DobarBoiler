@@ -3,6 +3,7 @@ package rs.novica.dobarboiler.scheduling
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
@@ -48,7 +49,15 @@ class AlarmReceiver : BroadcastReceiver() {
          */
         internal fun expeditedRequest(workerClass: Class<out ListenableWorker>): OneTimeWorkRequest =
             OneTimeWorkRequest.Builder(workerClass)
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .apply {
+                    // Pre-S, WorkManager runs expedited work as a foreground service and the
+                    // default CoroutineWorker.getForegroundInfo() throws — the work would fail
+                    // before doWork(). A plain request enqueued from an alarm receiver still
+                    // starts promptly there; the expedited-job quota only exists on API 31+.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                    }
+                }
                 .setConstraints(
                     Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
                 )

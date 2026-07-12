@@ -14,7 +14,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -123,8 +124,18 @@ class Converger(
     private val clock: Clock,
 ) {
 
+    /**
+     * Serializes concurrent converge() calls (UI, workers, BoostService): the last caller
+     * to enter resolves against the freshest plan and arms last, and two command batches
+     * can never interleave.
+     */
+    private val convergeMutex = Mutex()
+
     /** The whole app's heartbeat. Safe to call from anywhere, any time. */
-    suspend fun converge(trigger: String, pollFresh: Boolean = true): ConvergeOutcome {
+    suspend fun converge(trigger: String, pollFresh: Boolean = true): ConvergeOutcome =
+        convergeMutex.withLock { convergeLocked(trigger, pollFresh) }
+
+    private suspend fun convergeLocked(trigger: String, pollFresh: Boolean): ConvergeOutcome {
         // 1. Not onboarded → nothing to do.
         val gwId = creds.gwId ?: return ConvergeOutcome.Skipped("not onboarded")
         val now = clock.instant()
@@ -134,8 +145,10 @@ class Converger(
         val preRuntime = settings.runtimeSnapshot()
         val firedReason = preRuntime.nextTransitionReason
 
-        // Scheduled transitions outrank manual holds by definition (§7.4).
-        if (trigger == Triggers.ALARM && preRuntime.manualHoldUntil != null) {
+        // Scheduled transitions outrank manual holds by definition (§7.4). Boost start/end
+        // are explicit app-driven transitions and must assert the same way — otherwise a
+        // mid-boost hold would silently block the boost revert (boiler left ON for hours).
+        if ((trigger == Triggers.ALARM || trigger == Triggers.BOOST) && preRuntime.manualHoldUntil != null) {
             settings.updateRuntime { it.copy(manualHoldUntil = null) }
         }
 
@@ -158,6 +171,10 @@ class Converger(
                     detail = "Upit stanja nije uspeo: ${e.message ?: e.javaClass.simpleName}",
                     outcome = LogOutcomes.RETRYING,
                 )
+                // Arm the transition alarm anyway (mirrors the execute-failure path) —
+                // the retry chain re-converges, and a wrong-but-armed schedule beats a
+                // silent one after the retries are exhausted.
+                armAlarms(now, res, inputs, trigger)
                 return ConvergeOutcome.Failed(e)
             }
         } else {
@@ -208,6 +225,10 @@ class Converger(
                 try {
                     device.execute(gwId, cmds)
                 } catch (e: Exception) {
+                    // The batch may be half-applied — device state is indeterminate. Drop the
+                    // applied record so the retry treats the mismatch as ordinary drift instead
+                    // of misclassifying our own half-applied state as an external manual change.
+                    settings.updateRuntime { it.copy(lastAppliedStateJson = null, lastAppliedAt = null) }
                     if (e is AristonException.AuthFailed) notifier.authFailed()
                     log.log(
                         kind = LogKinds.COMMAND_FAILED, trig = trigger,
@@ -293,7 +314,10 @@ class Converger(
      * never fatal — the heating plan must not retry because of a hygiene extra.
      */
     private suspend fun maybeTriggerAntilegionella(trigger: String) {
-        val vacation = runCatching { schedule.vacation().first() }.getOrNull() ?: return
+        // The active-only flow is already empty here: scheduleInputs (step 2) deactivated
+        // the finished hold. Read the latest row regardless of the active flag instead.
+        val vacation = runCatching { schedule.latestVacation() }.getOrNull() ?: return
+        if (!vacation.antiLegOnReturn) return
         val resumeAt = vacation.resumeAt ?: return
         if (Duration.between(vacation.startsAt, resumeAt) <= Duration.ofDays(7)) return
         try {

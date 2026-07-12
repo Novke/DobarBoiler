@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -99,7 +100,10 @@ class ScheduleRepository(
             db.invalidationTracker.addObserver(observer)
             awaitClose { db.invalidationTracker.removeObserver(observer) }
         }.flowOn(Dispatchers.IO)
-        val settingChanges: Flow<Unit> = settings.settings.drop(1).map { }
+        // AppSettings shares the DataStore file with RuntimeState: dedupe, or every
+        // runtime write (lastCloudContactAt on each poll, applied-state after each
+        // batch) would emit a spurious inputs-changed event.
+        val settingChanges: Flow<Unit> = settings.settings.distinctUntilChanged().drop(1).map { }
         return merge(tableChanges, settingChanges).conflate()
     }
 
@@ -116,14 +120,15 @@ class ScheduleRepository(
             p.id
         }
 
-    /** False (and no deletion) while the preset is referenced by the weekly plan. */
+    /** False (and no deletion) while the preset is referenced by the weekly plan or a day override. */
     suspend fun deletePreset(id: Long): Boolean {
         if (presetInUse(id)) return false
         presetDao.delete(id)
         return true
     }
 
-    suspend fun presetInUse(id: Long): Boolean = planDao.countUsing(id) > 0
+    suspend fun presetInUse(id: Long): Boolean =
+        planDao.countUsing(id) > 0 || dayOverrideDao.countUsing(id) > 0
 
     // -- Weekly plan --------------------------------------------------------------
 
@@ -186,11 +191,22 @@ class ScheduleRepository(
 
     fun vacation(): Flow<VacationHold?> = vacationDao.activeFlow().map { it?.toDomain() }
 
+    /**
+     * Latest hold regardless of the active flag — the Converger's anti-legionella check
+     * runs after `scheduleInputs` has already deactivated the finished hold.
+     */
+    suspend fun latestVacation(): VacationHold? = vacationDao.latest()?.toDomain()
+
     /** Max one active hold: any previous hold is deactivated first. */
-    suspend fun startVacation(resumeAt: Instant?): Long {
+    suspend fun startVacation(resumeAt: Instant?, antiLegOnReturn: Boolean = true): Long {
         vacationDao.deactivateAll()
         return vacationDao.insert(
-            VacationEntity(startsAt = Instant.now(), resumeAt = resumeAt, active = true),
+            VacationEntity(
+                startsAt = Instant.now(),
+                resumeAt = resumeAt,
+                active = true,
+                antiLegOnReturn = antiLegOnReturn,
+            ),
         )
     }
 

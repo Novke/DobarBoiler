@@ -81,6 +81,8 @@ data class VacationEntity(
     val startsAt: Instant,
     val resumeAt: Instant?,            // null = until cancelled
     val active: Boolean,
+    /** §6.6 — user's choice: hygiene cycle on return from a >7-day hold (default ON). */
+    @ColumnInfo(defaultValue = "1") val antiLegOnReturn: Boolean = true,
 )
 
 /** SPEC §4.2 — `boost_session`. `completedAt == null` means still running. */

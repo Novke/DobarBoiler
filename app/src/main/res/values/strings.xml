@@ -70,6 +70,7 @@
     <string name="vac_antileg">Antibakterijski ciklus po povratku (preporučeno za duže od 7 dana)</string>
     <string name="vac_reboot_note">Uključenje je zapamćeno i preživljava restart telefona.</string>
     <string name="vac_do_off">Isključi</string>
+    <string name="vac_past_datetime">Izabrano vreme povratka je u prošlosti — izaberi buduće vreme.</string>
 
     <!-- Boost -->
     <string name="boost_title">Boost</string>

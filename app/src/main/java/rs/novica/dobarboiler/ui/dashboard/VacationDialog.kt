@@ -132,7 +132,16 @@ class VacationViewModel(app: Application, container: AppContainer) :
                     ReturnMode.DATETIME -> _state.value.returnDateTime.atZone(zone).toInstant()
                     ReturnMode.MANUAL -> null
                 }
-                container.scheduleRepository.startVacation(resumeAt)
+                // A past resume point would persist an "active" hold the resolver ignores —
+                // the boiler would keep heating while the UI shows a vacation.
+                if (_state.value.returnMode == ReturnMode.DATETIME &&
+                    resumeAt != null && !resumeAt.isAfter(now)
+                ) {
+                    emitError(app.getString(R.string.vac_past_datetime))
+                    _state.update { it.copy(isSaving = false) }
+                    return@launch
+                }
+                container.scheduleRepository.startVacation(resumeAt, _state.value.antiLegOnReturn)
             } catch (t: Throwable) {
                 emitError(t)
                 _state.update { it.copy(isSaving = false) }

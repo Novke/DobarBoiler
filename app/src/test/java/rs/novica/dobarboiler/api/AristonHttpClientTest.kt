@@ -171,6 +171,21 @@ class AristonHttpClientTest {
         }
     }
 
+    @Test
+    fun `405 with re-login hitting 5xx throws Transient, not AuthFailed`() = runBlocking {
+        creds.storeToken("stale")
+        server.enqueue(MockResponse().setResponseCode(405))
+        server.enqueue(MockResponse().setResponseCode(502).setBody("bad gateway")) // re-login attempt 1
+        server.enqueue(MockResponse().setResponseCode(502).setBody("bad gateway")) // re-login retry
+
+        try {
+            client.getState("ABCDEF012345")
+            fail("expected Transient")
+        } catch (e: AristonException.Transient) {
+            // a cloud outage during re-login is a connection problem, not bad credentials
+        }
+    }
+
     // ------------------------------------------- bare-boolean serialization
 
     @Test

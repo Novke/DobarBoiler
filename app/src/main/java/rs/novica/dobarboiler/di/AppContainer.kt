@@ -10,6 +10,9 @@ import androidx.work.WorkManager
 import java.time.Clock
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import rs.novica.dobarboiler.api.AristonApiClient
@@ -34,6 +37,13 @@ import rs.novica.dobarboiler.scheduling.WatchdogWorker
  * worker or the first Compose screen materializes only the slice of the graph it needs.
  */
 class AppContainer(private val app: Application) {
+
+    /**
+     * Process-lifetime scope for work that must outlive any single ViewModel —
+     * notably the USER convergence launched from sheets/dialogs that dismiss
+     * (and clear their ViewModelStore) immediately after saving.
+     */
+    val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Configured time zone. Read once from [SettingsStore] on first access
