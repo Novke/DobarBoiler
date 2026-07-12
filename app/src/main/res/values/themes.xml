@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Minimal XML shell; all real theming is Compose Material3 (ui/theme/Theme.kt). -->
+    <style name="Theme.DobarBoiler" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">?android:attr/colorBackground</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+</resources>
