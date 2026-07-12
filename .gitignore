@@ -1,0 +1,38 @@
+# --- Secrets: never commit credentials ---
+creds.txt
+*.creds
+.env
+*.keystore
+*.jks
+
+# --- Android / Gradle ---
+*.apk
+*.aab
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+
+# --- IDE ---
+.idea/
+*.iml
+.vscode/
+
+# --- Java crash logs ---
+hs_err_pid*.log
+replay_pid*.log
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+
+# --- Claude local ---
+.claude/settings.local.json
+
+# --- OS ---
+Thumbs.db
+Desktop.ini
