@@ -65,7 +65,7 @@ class HistoryViewModel(app: Application, container: AppContainer) :
                 val zone = container.zone
                 _days.value = entries
                     .map { e ->
-                        val at = Instant.ofEpochMilli(e.at)
+                        val at = e.at
                         Triple(at.atZone(zone).toLocalDate(), at, e)
                     }
                     .sortedByDescending { it.second }
