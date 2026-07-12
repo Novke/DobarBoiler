@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Boiler tank with a water drop, drawn inside the 66dp adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Tank body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,27 h22 a9,9 0 0 1 9,9 v34 a9,9 0 0 1 -9,9 h-22 a9,9 0 0 1 -9,-9 v-34 a9,9 0 0 1 9,-9 z" />
+
+    <!-- Legs -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,79 h7 v6 h-7 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M61,79 h7 v6 h-7 z" />
+
+    <!-- Water drop (punched in the seed color) -->
+    <path
+        android:fillColor="#A23E16"
+        android:pathData="M54,37 c5.5,7.5 8.5,11.5 8.5,16.5 a8.5,8.5 0 0 1 -17,0 c0,-5 3,-9 8.5,-16.5 z" />
+</vector>

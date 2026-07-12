@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DobarBoiler</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Početna</string>
+    <string name="nav_planner">Planer</string>
+    <string name="nav_presets">Preseti</string>
+    <string name="nav_more">Još</string>
+
+    <!-- Dashboard -->
+    <string name="dash_heating">Greje</string>
+    <string name="dash_maintaining">Održava temperaturu</string>
+    <string name="dash_off">Isključen</string>
+    <string name="dash_target">Cilj: %1$d °C</string>
+    <string name="dash_showers">%1$d tuša</string>
+    <string name="dash_time_left">još %1$s</string>
+    <string name="dash_eco">Eco</string>
+    <string name="dash_updated_ago">Ažurirano pre %1$s</string>
+
+    <!-- Active source card -->
+    <string name="source_planner">Planer: %1$s — „%2$s\" %3$d °C</string>
+    <string name="source_override_until">Override do %1$s: %2$d °C</string>
+    <string name="source_vacation">Odmor do %1$s — isključen</string>
+    <string name="source_vacation_manual">Odmor — isključen dok ga ne upališ</string>
+    <string name="source_boost">Boost do %1$d °C — u toku</string>
+    <string name="source_manual">Ručna promena — važi do %1$s</string>
+    <string name="source_keep_warm">Održavanje %1$d °C (van prozora)</string>
+    <string name="source_off">Isključen do sledećeg prozora</string>
+    <string name="source_next_window">Sledeće: grejanje %1$s–%2$s</string>
+
+    <!-- Quick actions -->
+    <string name="action_boost">Boost</string>
+    <string name="action_power_off">Ugasi</string>
+    <string name="action_temp_bump">Temp</string>
+    <string name="action_one_time">Jednokratno…</string>
+    <string name="action_return_to_plan">Vrati na plan</string>
+    <string name="action_cancel_boost">Prekini boost</string>
+    <string name="action_cancel_vacation">Prekini odmor</string>
+
+    <!-- One-time override -->
+    <string name="ot_title">Jednokratna izmena</string>
+    <string name="ot_replace_days">Zameni dan(e)</string>
+    <string name="ot_replace_days_sub">„ovaj vikend ne diži\"</string>
+    <string name="ot_hot_by">Toplo u...</string>
+    <string name="ot_hot_by_sub">„danas u 21h hoću 60 °C\"</string>
+    <string name="ot_instead_of_planner">Umesto planera važi:</string>
+    <string name="ot_skip_night">Preskoči (bez grejanja)</string>
+    <string name="ot_auto_resume_note">Posle izabranih dana planer se sam nastavlja.</string>
+    <string name="ot_start_estimate">Grejanje počinje oko %1$s (procena: %2$d °C/h, margina %3$d min).</string>
+    <string name="ot_revert_note">Posle %1$s vraćam se na planer.</string>
+    <string name="ot_today">Danas</string>
+    <string name="ot_tomorrow">Sutra</string>
+    <string name="ot_despite_vacation">Zagrejaće se uprkos odmoru.</string>
+
+    <!-- Buttons -->
+    <string name="btn_save">Sačuvaj</string>
+    <string name="btn_schedule">Zakaži</string>
+    <string name="btn_start">Pokreni</string>
+    <string name="btn_cancel">Otkaži</string>
+    <string name="btn_fix">Popravi</string>
+    <string name="btn_apply">Primeni</string>
+
+    <!-- Vacation -->
+    <string name="vac_title">Isključi bojler</string>
+    <string name="vac_when_back">Kada da se ponovo uključi?</string>
+    <string name="vac_by_planner">Po planeru (sledeći prozor)</string>
+    <string name="vac_pick_datetime">Izaberi datum i vreme…</string>
+    <string name="vac_manual_only">Dok ga ja ne upalim</string>
+    <string name="vac_antileg">Antibakterijski ciklus po povratku (preporučeno za duže od 7 dana)</string>
+    <string name="vac_reboot_note">Uključenje je zapamćeno i preživljava restart telefona.</string>
+    <string name="vac_do_off">Isključi</string>
+
+    <!-- Boost -->
+    <string name="boost_title">Boost</string>
+    <string name="boost_eco_note">Eco se privremeno isključuje (maksimalna snaga).</string>
+    <string name="boost_eta">Procena: gotovo za ~%1$s</string>
+    <string name="boost_revert_to">Kad stigne do cilja, vraćam na: %1$s</string>
+    <string name="boost_notif">Boost: %1$d°/%2$d° — još ~%3$s</string>
+
+    <!-- Presets -->
+    <string name="preset_title">Preseti</string>
+    <string name="preset_new">Novi preset</string>
+    <string name="preset_name">Naziv</string>
+    <string name="preset_temp">Ciljna temperatura</string>
+    <string name="preset_eco">Eco režim (jeftinije, sporije grejanje)</string>
+    <string name="preset_window_override">Poseban prozor grejanja za ovaj preset</string>
+    <string name="preset_in_use_error">Preset je u planeru — prvo izaberi zamenu.</string>
+
+    <!-- Planner -->
+    <string name="planner_title">Nedeljni planer</string>
+    <string name="planner_weekdays">Radni dani</string>
+    <string name="planner_weekend">Vikend</string>
+    <string name="planner_override_badge">Jednokratno: %1$s</string>
+    <string name="planner_no_heating">Bez grejanja</string>
+
+    <!-- Days -->
+    <string name="day_mon">Ponedeljak</string>
+    <string name="day_tue">Utorak</string>
+    <string name="day_wed">Sreda</string>
+    <string name="day_thu">Četvrtak</string>
+    <string name="day_fri">Petak</string>
+    <string name="day_sat">Subota</string>
+    <string name="day_sun">Nedelja</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Podešavanja</string>
+    <string name="set_window">Prozor grejanja</string>
+    <string name="set_window_start">Početak (jeftina struja + margina)</string>
+    <string name="set_window_end">Kraj</string>
+    <string name="set_outside_window">Van prozora</string>
+    <string name="set_outside_off">Bojler isključen (podrazumevano)</string>
+    <string name="set_outside_keep">Održavaj %1$d °C i preko dana (skuplja struja!)</string>
+    <string name="set_advanced">Napredno</string>
+    <string name="set_hysteresis">Napredno održavanje (histerezis u aplikaciji)</string>
+    <string name="set_hysteresis_note">Podrazumevano bojler sam drži temperaturu. Uključi samo ako želiš širu traku — više komandi i potrošnje baterije.</string>
+    <string name="set_stop_at">Stani na %1$d °C</string>
+    <string name="set_restart_at">Ponovo grej od %1$d °C</string>
+    <string name="set_heat_rate">Brzina grejanja</string>
+    <string name="set_heat_rate_value">%1$d °C na sat</string>
+    <string name="set_heat_rate_learned">Izmereno iz istorije: %1$.1f °C/h</string>
+    <string name="set_manual_policy">Ručne promene na bojleru</string>
+    <string name="set_manual_respect">Poštuj do sledećeg rasporeda (podrazumevano)</string>
+    <string name="set_manual_reassert">Vrati na plan odmah</string>
+    <string name="set_midwindow_check">Provera u sred noćnog prozora</string>
+    <string name="set_max_setpoint">Maksimalna temperatura (bojler)</string>
+    <string name="set_boost_timeout">Maksimalno trajanje boosta</string>
+    <string name="set_account">Nalog</string>
+    <string name="set_health">Pouzdanost</string>
+    <string name="set_logout">Odjavi se</string>
+
+    <!-- Health -->
+    <string name="health_bad_title">Pouzdanost ugrožena</string>
+    <string name="health_exact_alarms">Tačni alarmi</string>
+    <string name="health_battery">Optimizacija baterije</string>
+    <string name="health_notifications">Notifikacije</string>
+    <string name="health_ok">Sve je u redu — automatika radi pouzdano.</string>
+    <string name="health_stale">Nema kontakta sa cloud-om od %1$s</string>
+
+    <!-- History -->
+    <string name="history_title">Istorija</string>
+    <string name="hist_heat_on">Uključeno grejanje — %1$s %2$d °C</string>
+    <string name="hist_heat_off">Isključeno grejanje</string>
+    <string name="hist_retry">Ponovni pokušaj (%1$s)</string>
+    <string name="hist_failed">Neuspešno — %1$s</string>
+    <string name="hist_manual_detected">Otkrivena ručna promena na bojleru</string>
+    <string name="hist_boost_done">Boost završen — %1$d °C</string>
+
+    <!-- Login & onboarding -->
+    <string name="login_title">Prijava na Ariston nalog</string>
+    <string name="login_email">Imejl</string>
+    <string name="login_password">Lozinka</string>
+    <string name="login_error">Prijava nije uspela. Proveri podatke.</string>
+    <string name="onb_pick_device">Izaberi uređaj</string>
+    <string name="onb_window_title">Kada je struja jeftina?</string>
+    <string name="onb_permissions_title">Dozvole za pouzdan rad</string>
+    <string name="onb_battery_note">Isključi optimizaciju baterije da bi noćno grejanje radilo dok telefon spava.</string>
+    <string name="onb_oem_note">Na Samsung/Xiaomi telefonima ukloni DobarBoiler iz „aplikacija koje spavaju\".</string>
+
+    <!-- Notifications -->
+    <string name="notif_ch_errors">Greške</string>
+    <string name="notif_ch_boost">Boost</string>
+    <string name="notif_ch_events">Događaji</string>
+    <string name="notif_heat_started">Grejanje počelo (%1$s, cilj %2$d °C)</string>
+    <string name="notif_heat_stopped">Grejanje završeno — bojler isključen</string>
+    <string name="notif_action_failed">Zakazana akcija nije uspela: %1$s. Otvori aplikaciju.</string>
+    <string name="notif_boost_done">Boost gotov — %1$d °C dostignuto</string>
+    <string name="notif_boost_timeout">Boost prekinut posle %1$s — voda je na %2$d °C</string>
+    <string name="notif_vacation_resumed">Bojler ponovo uključen (kraj odmora)</string>
+    <string name="notif_manual_change">Ručna promena na bojleru — važi do %1$s</string>
+    <string name="notif_hbt_late">Kasni start grejanja — voda možda neće stići do cilja (%1$d °C manjka)</string>
+    <string name="notif_alarms_off">Tačni alarmi su isključeni — raspored neće raditi.</string>
+
+    <!-- Misc -->
+    <string name="unit_c">°C</string>
+
+    <!-- UI module: layout-only strings (SPEC §9 allows additions beyond the frozen table) -->
+    <string name="common_error">Greška: %1$s</string>
+    <string name="login_submit">Prijavi se</string>
+    <string name="onb_no_devices">Nije pronađen nijedan Velis uređaj na nalogu.</string>
+    <string name="onb_continue">Nastavi</string>
+    <string name="onb_finish">Završi</string>
+    <string name="perm_granted">Omogućeno</string>
+    <string name="perm_denied">Nije omogućeno</string>
+    <string name="perm_request">Omogući</string>
+    <string name="device_offline">Van mreže</string>
+    <string name="ot_section_active">Aktivno</string>
+    <string name="ot_section_upcoming">Predstojeće</string>
+    <string name="ot_section_expired">Nedavno isteklo</string>
+    <string name="ot_no_overrides">Nema jednokratnih izmena.</string>
+    <string name="preset_delete">Obriši</string>
+    <string name="preset_none">Nema preseta — napravi prvi pomoću dugmeta ispod.</string>
+    <string name="preset_name_invalid">Naziv nije važeći ili već postoji.</string>
+    <string name="planner_apply_weekdays">Primeni na radne dane</string>
+    <string name="planner_apply_weekend">Primeni na vikend</string>
+    <string name="hist_empty">Istorija je prazna.</string>
+    <string name="set_zone">Vremenska zona</string>
+    <string name="set_safety_margin">Sigurnosna margina</string>
+    <string name="set_reassert_minutes">Ponovo primeni posle</string>
+    <string name="set_band_poll">Provera na</string>
+    <string name="set_hours_value">%1$d h</string>
+</resources>
