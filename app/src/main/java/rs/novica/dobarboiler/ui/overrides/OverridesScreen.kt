@@ -97,7 +97,7 @@ class OverridesViewModel(app: Application, container: AppContainer) :
                             .filter { it.kind == LogKinds.OVERRIDE_EXPIRED }
                             .take(10)
                             .map { entry ->
-                                Fmt.dateTime(Instant.ofEpochMilli(entry.at), zone) to entry.detail
+                                Fmt.dateTime(entry.at, zone) to entry.detail
                             },
                     )
                 }
