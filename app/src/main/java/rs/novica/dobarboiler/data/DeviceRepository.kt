@@ -61,8 +61,12 @@ class DeviceRepository(
             val cached = _snapshot.value ?: snapshotDao.get()?.toDomainSnapshot()
                 ?.also { _snapshot.compareAndSet(null, it) }
             val now = clock.instant()
-            if (cached != null && Duration.between(cached.at, now) < minInterval) {
-                return cached
+            if (cached != null) {
+                val age = Duration.between(cached.at, now)
+                // A negative age means the cache is stamped in the future (wall clock set
+                // backwards) — treat it as stale and poll, or it would suppress all polls
+                // (including forced refresh(ZERO)) until real time catches up.
+                if (!age.isNegative && age < minInterval) return cached
             }
 
             val gwId = requireGwId()

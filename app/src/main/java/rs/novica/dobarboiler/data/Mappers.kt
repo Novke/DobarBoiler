@@ -144,7 +144,7 @@ fun HeatByTimeEntity.toDomain(): OneTimeOverride.HeatByTime =
     )
 
 fun VacationEntity.toDomain(): VacationHold =
-    VacationHold(id = id, startsAt = startsAt, resumeAt = resumeAt)
+    VacationHold(id = id, startsAt = startsAt, resumeAt = resumeAt, antiLegOnReturn = antiLegOnReturn)
 
 fun BoostSessionEntity.toDomain(): BoostSession = BoostSession(
     id = id,

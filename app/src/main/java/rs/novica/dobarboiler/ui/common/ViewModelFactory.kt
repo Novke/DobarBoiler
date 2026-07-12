@@ -4,11 +4,9 @@ import android.app.Application
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
@@ -60,10 +58,12 @@ abstract class ContainerViewModel(
     /**
      * Runs the whole-app convergence heartbeat after a user-driven schedule mutation.
      * Fire-and-forget: failures surface as a snackbar (the Converger itself already
-     * logs and notifies), never as a crash.
+     * logs and notifies), never as a crash. Launched on the application-level scope,
+     * not viewModelScope — sheets/dialogs dismiss (clearing the ViewModel) right after
+     * saving, and the convergence must not die with it mid-flight.
      */
     protected fun convergeUser(onDone: (() -> Unit)? = null) {
-        viewModelScope.launch(Dispatchers.IO) {
+        container.appScope.launch {
             try {
                 when (val outcome = container.converger.converge(Triggers.USER)) {
                     is ConvergeOutcome.Failed -> emitError(

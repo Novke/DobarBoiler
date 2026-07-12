@@ -74,6 +74,9 @@ interface DayOverrideDao {
     @Query("DELETE FROM day_override WHERE id = :id")
     suspend fun delete(id: Long): Int
 
+    @Query("SELECT COUNT(*) FROM day_override WHERE presetId = :presetId")
+    suspend fun countUsing(presetId: Long): Int
+
     @Query("DELETE FROM day_override WHERE date < :cutoff")
     suspend fun deleteBefore(cutoff: LocalDate): Int
 }
@@ -112,6 +115,10 @@ interface VacationDao {
 
     @Query("SELECT * FROM vacation WHERE active = 1 ORDER BY id DESC LIMIT 1")
     suspend fun active(): VacationEntity?
+
+    /** Latest hold regardless of the active flag — the just-ended hold at VACATION_RESUME. */
+    @Query("SELECT * FROM vacation ORDER BY startsAt DESC, id DESC LIMIT 1")
+    suspend fun latest(): VacationEntity?
 
     @Insert
     suspend fun insert(row: VacationEntity): Long

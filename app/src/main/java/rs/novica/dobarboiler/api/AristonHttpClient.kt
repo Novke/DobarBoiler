@@ -202,9 +202,10 @@ class AristonHttpClient(
             ?: throw AristonException.AuthFailed("no credentials")
         try {
             doLogin(email, password)
-        } catch (e: AristonException.RateLimited) {
-            throw e // 429 during re-login is rate limiting, not bad credentials
-        } catch (e: AristonException) {
+        } catch (e: AristonException.AuthFailed) {
+            // Only genuine credential rejections become AuthFailed; RateLimited and
+            // Transient (5xx/IOException) propagate as-is — a cloud outage during
+            // re-login is a connection problem, not a changed password (protocol.md §8).
             throw AristonException.AuthFailed("login failed — password changed?")
         }
     }

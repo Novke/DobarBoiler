@@ -26,7 +26,11 @@ sealed interface OneTimeOverride {
 }
 
 /** Boiler-off hold; `resumeAt == null` means "until cancelled by the user". */
-data class VacationHold(val id: Long, val startsAt: Instant, val resumeAt: Instant?)
+data class VacationHold(
+    val id: Long, val startsAt: Instant, val resumeAt: Instant?,
+    /** §6.6 — run the anti-legionella hygiene cycle on return from a >7-day hold. */
+    val antiLegOnReturn: Boolean = true,
+)
 
 /** An app-level boost run (device stays in mode 1; boost = power + temp + eco off). */
 data class BoostSession(

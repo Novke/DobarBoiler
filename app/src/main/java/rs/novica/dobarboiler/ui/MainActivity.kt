@@ -51,6 +51,9 @@ class MainActivity : ComponentActivity() {
     private fun maybeEmitOpenHistory(intent: Intent?) {
         if (intent?.getBooleanExtra(Notifier.EXTRA_OPEN_HISTORY, false) == true) {
             openHistoryEvents.tryEmit(Unit)
+            // The launch intent survives configuration changes — consume the extra, or
+            // every rotation would re-navigate to History.
+            intent.removeExtra(Notifier.EXTRA_OPEN_HISTORY)
         }
     }
 }

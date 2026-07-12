@@ -134,9 +134,11 @@ class DashboardViewModel(app: Application, container: AppContainer) :
     }
 
     /**
-     * Quick "Temp" bump (SPEC §8): a HeatByTime with `eventTime = nextTransition.at` and
-     * `holdMinutes = 0`, eco left as currently observed — a direct temp override valid until
-     * the next scheduled transition.
+     * Quick "Temp" bump (SPEC §8): a direct temp override valid until the next scheduled
+     * transition, eco left as currently observed. Anchored at `now` (with holdMinutes
+     * covering the span to the next transition) so the engine's
+     * `[computedStart, eventTime + hold)` activation window includes `now` immediately —
+     * an eventTime in the future would keep the bump inert until its heat-lead.
      */
     fun tempBump(target: Int) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -145,13 +147,13 @@ class DashboardViewModel(app: Application, container: AppContainer) :
                 val inputs = container.scheduleRepository.scheduleInputs(now)
                 val resolution = container.engine.resolve(now, inputs)
                 // No scheduled transition (empty world) → bound the bump to 2 h.
-                val eventTime = resolution.nextTransition?.at ?: now.plus(Duration.ofHours(2))
+                val end = resolution.nextTransition?.at ?: now.plus(Duration.ofHours(2))
                 val eco = container.deviceRepository.snapshot.value?.eco ?: true
                 container.scheduleRepository.addHeatByTime(
-                    eventTime = eventTime,
+                    eventTime = now,
                     targetTemp = clampTemp(target, inputs),
                     eco = eco,
-                    holdMinutes = 0,
+                    holdMinutes = Duration.between(now, end).toMinutes().toInt().coerceAtLeast(1),
                 )
             } catch (t: Throwable) {
                 emitError(t)

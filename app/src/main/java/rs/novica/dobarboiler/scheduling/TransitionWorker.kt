@@ -9,6 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import java.time.Duration
 import rs.novica.dobarboiler.App
 
@@ -31,7 +32,11 @@ class TransitionWorker(
 
     override suspend fun doWork(): Result {
         val container = (applicationContext as App).container
-        return when (val outcome = container.converger.converge(Triggers.ALARM)) {
+        // The 30-min OFF-retry chain is a rescue, not a scheduled transition: it converges
+        // with WATCHDOG so a stale chain run can never wipe a legitimate manual hold the
+        // user established after the window ended (§7.4).
+        val trigger = if (inputData.getBoolean(KEY_OFF_RETRY, false)) Triggers.WATCHDOG else Triggers.ALARM
+        return when (val outcome = container.converger.converge(trigger)) {
             is ConvergeOutcome.Converged, is ConvergeOutcome.Skipped -> Result.success()
             is ConvergeOutcome.Failed -> handleFailure(outcome.error)
         }
@@ -59,6 +64,7 @@ class TransitionWorker(
         if (desiredOff) {
             val retry = OneTimeWorkRequestBuilder<TransitionWorker>()
                 .setInitialDelay(Duration.ofMinutes(30))
+                .setInputData(workDataOf(KEY_OFF_RETRY to true))
                 .setConstraints(
                     Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
                 )
@@ -83,5 +89,8 @@ class TransitionWorker(
          * (idempotent convergence).
          */
         const val UNIQUE_OFF_RETRY = "transitionOffRetry"
+
+        /** Marks a run of the 30-min OFF-retry chain (converges as WATCHDOG, not ALARM). */
+        private const val KEY_OFF_RETRY = "offRetry"
     }
 }
