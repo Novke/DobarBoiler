@@ -11,10 +11,12 @@ Android app, which replaces the official Ariston NET app. Novica writes in Serbi
 - The boiler has **no local API**; everything goes through the Ariston cloud
   (`https://www.ariston-net.remotethermo.com/api/v2/`), so it is reachable from this box as well as from the phone.
 - The app runs on Novica's phone (sideloaded). Nothing in this repo is deployed on the box.
-- Ariston credentials are **not** on this box: no SSM parameter `/dev/dobarboiler/env` exists. If live access to
-  the boiler is needed (e.g. `tools/ariston_test.py`, checking state while debugging), ask Novica to create it
-  (keys `ARISTON_USER`, `ARISTON_PASS`) and render it with `ssm-env dobarboiler`. Every command sent changes a
-  real boiler in a real home — read state freely, ask before switching power/temperature/modes.
+- Ariston credentials live in SSM `/dev/dobarboiler/env` (keys `ARISTON_USER`, `ARISTON_PASS`;
+  since 2026-10-18), rendered by `ssm-env dobarboiler` to `/data/secrets/dobarboiler.env`.
+  Claude reads the live boiler only through `bash /data/dev/DobarBoiler/tools/ariston-read.sh [test]`, which loads
+  the env inside its own process and runs a fixed read-only script; it is allowed in the gitignored
+  `.claude/settings.local.json`. Do not source the env file in other commands. Every command sent changes a real
+  boiler in a real home — read state freely, ask before switching power/temperature/modes.
 
 ## Device facts (verified live, `docs/api-findings.md`)
 
@@ -37,7 +39,8 @@ box has **no Android SDK and no Gradle** yet, so nothing builds here until both 
 ```
 
 Live API smoke test (Python reference library `ariston`, use a venv — PEP 668):
-`ARISTON_USER=... ARISTON_PASS=... python tools/ariston_test.py`.
+`ARISTON_USER=... ARISTON_PASS=... python tools/ariston_test.py`; on novica-dev `bash tools/ariston-read.sh`
+(venv `/data/tmp/dobarboiler-venv`, created on first run).
 
 No lint config, no instrumented tests, no CI.
 
