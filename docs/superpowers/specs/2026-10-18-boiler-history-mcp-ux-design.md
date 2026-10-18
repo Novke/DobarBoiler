@@ -119,10 +119,11 @@ telefon (DobarBoiler) ──POST akcije──────▶│  ├─ REST API
   `shared-postgres`) i `sila-observability` nije potrebna.
 - Pristup preko tailnet-a kroz postojeći preview mehanizam: `preview add boiler 8020` daje
   `http://novica-dev/boiler/`. Nema javnog vhost-a.
-- Tajne: postojeći SSM `/dev/dobarboiler/env` (`ARISTON_USER`, `ARISTON_PASS`) plus nov ključ
-  `BOILER_API_TOKEN` (telefon i MCP) i `DATABASE_URL`. Novica dodaje ključeve sa laptopa
-  (`aws ssm put-parameter --overwrite ...`), ovde `ssm-env dobarboiler`. Compose koristi
-  `env_file: /data/secrets/dobarboiler.env`.
+- Tajne: Ariston kredencijali ostaju u postojećem SSM `/dev/dobarboiler/env`. Tajne servera idu u **poseban**
+  parametar `/dev/dobarboiler-server/env` (`BOILER_API_TOKEN`, `DOBARBOILER_DB_PASSWORD`,
+  `DOBARBOILER_RO_PASSWORD`), jer agenti po pravilu iz CLAUDE.md ne smeju da učitavaju `dobarboiler.env`.
+  Novica ga pravi jednom skriptom sa laptopa (`server/ops/add-secrets.ps1`), ovde `ssm-env dobarboiler-server`.
+  Compose dobija oba fajla kao `env_file`.
 - Biblioteke (izbor graditelja u okviru ovoga): `httpx` za Ariston, `psycopg` 3, `FastAPI` + `uvicorn`,
   zvanični MCP Python SDK (`mcp`, FastMCP, streamable HTTP montiran u isti ASGI app), `pytest`.
   Bez ORM-a; SQL migracije kao numerisani `.sql` fajlovi koje servis primeni na startu.
