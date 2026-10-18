@@ -160,11 +160,11 @@ Sva vremena `timestamptz`; prikaz u `Europe/Belgrade`.
 | `app_action` | `(install_id, local_id)` | kopija `action_log` sa telefona: `at, kind, trig, detail, outcome, attempt, state_json` + `received_at` |
 | `app_intent` | `(install_id, at)` | šta je aplikacija htela posle svakog converge-a: izvor (`BOOST`, `PLAN`…), željeno stanje, sledeća tranzicija |
 | `event` | `id` | izvedeni događaji: `at, kind, attribution, severity, detail jsonb` |
-| `tariff` | `valid_from` | `cheap_start, cheap_end, summer_cheap_start, summer_cheap_end, cheap_price, expensive_price, zone` |
+| `tariff` | `valid_from` | `cheap_start, cheap_end, cheap_price, expensive_price, zone` |
 | `poll_log` | `id` | `at, endpoint, status, ms, error` (čuva se 30 dana) |
 
-Bucket logika za tarifu: bucket `energy_2h` je jeftin ako ceo leži u jeftinom prozoru. Ako prozor seče bucket
-(npr. prozor 01–09), kWh bucket-a se deli srazmerno minutima sa `heat_req = true` iz `state_sample` sa obe
+Bucket logika za tarifu: bucket `energy_2h` je jeftin ako ceo leži u jeftinom prozoru. Ako bi prozor sekao bucket
+(sa 00–08 se to ne dešava), kWh bucket-a se deli srazmerno minutima sa `heat_req = true` iz `state_sample` sa obe
 strane granice; bez uzoraka, srazmerno vremenu. Prozor je konfiguracija, podrazumevano 00:00–08:00 lokalno.
 
 `energy_day` iz `p=3` je istina za dane; za dane iz poslednjih 48 h može se uporediti sa zbirom `energy_2h`
@@ -308,10 +308,12 @@ izvora, din/kWh bez PDV-a i akcize:
 Podrazumevano se koristi **plava zona**, jer je bojler marginalna potrošnja: njegovi kWh se plaćaju po
 najvišoj zoni koju domaćinstvo dostigne u mesecu. Novica može da prebaci na zelenu.
 
-Tarifni prozor se čuva sa dva para vremena, `cheap_start/cheap_end` (zimsko računanje) i opciono
-`summer_cheap_start/summer_cheap_end` (letnje računanje, `NULL` = isto kao zimsko). Podrazumevano 00:00–08:00
-lokalno cele godine; ako Novica potvrdi da se brojilo ne pomera na letnje vreme, letnji par je 01:00–09:00 i
-granični bucket-i se dele po §4.3. Tabela `tariff` sa `valid_from` omogućava promenu cena bez gubitka
+Tarifni prozor je **00:00–08:00 lokalnog vremena cele godine** (Novica potvrdio 2026-10-18). Granice se
+poklapaju sa dvosatnim bucket-ima, pa deljenje bucket-a iz §4.3 ostaje samo kao opšti mehanizam za slučaj da se
+prozor ikad promeni.
+
+Zonu Novica ne zna sa računa; ostaje plava. Na EPS računu se vidi u tabeli obračuna po zonama (redovi „zelena“,
+„plava“, „crvena“ sa kWh): ako postoji red „plava“ sa kWh većim od nule, marginalni kWh je plavi. Tabela `tariff` sa `valid_from` omogućava promenu cena bez gubitka
 istorijskih proračuna. Menja se kroz REST i iz podešavanja aplikacije.
 
 ## 6. Novi UX
@@ -444,7 +446,7 @@ obaveštenje „skupo grejanje u toku“ sa servera kroz push, prediktivno greja
 - Servis živi na novica-dev, kod u ovom repou, baza u `shared-postgres`, pristup samo kroz tailnet.
 - Stanje na 120 s; potrošnja iz cloud izveštaja, ne iz procene.
 - Akcije se šalju preko oznake `lastUploadedActionId`, bez migracije Room baze.
-- Jedan par cena za ceo bojler, bez zona; prozor 00–08 konfigurabilan.
+- Jedan par cena za ceo bojler (plava zona); prozor 00–08 cele godine, konfigurabilan.
 - Dinamičke boje ostaju za okvir, semantičke boje fiksne.
 - Raspored spaja Planer, Presete i Izuzetke; podešavanja idu iza zupčanika.
 
