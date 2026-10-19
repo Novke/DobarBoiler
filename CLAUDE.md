@@ -10,7 +10,8 @@ Android app, which replaces the official Ariston NET app. Novica writes in Serbi
 
 - The boiler has **no local API**; everything goes through the Ariston cloud
   (`https://www.ariston-net.remotethermo.com/api/v2/`), so it is reachable from this box as well as from the phone.
-- The app runs on Novica's phone (sideloaded). Nothing in this repo is deployed on the box.
+- The app runs on Novica's phone (sideloaded). The only part deployed on the box is the read-only history
+  server in `server/` (see "History server" below).
 - Ariston credentials live in SSM `/dev/dobarboiler/env` (keys `ARISTON_USER`, `ARISTON_PASS`;
   since 2026-10-18), rendered by `ssm-env dobarboiler` to `/data/secrets/dobarboiler.env`.
   Claude reads the live boiler only through `bash /data/dev/DobarBoiler/tools/ariston-read.sh [test]`, which loads
@@ -43,6 +44,30 @@ Live API smoke test (Python reference library `ariston`, use a venv — PEP 668)
 (venv `/data/tmp/dobarboiler-venv`, created on first run).
 
 No lint config, no instrumented tests, no CI.
+
+## History server (`server/`, package `boilerd`)
+
+A read-only witness on novica-dev: polls the Ariston cloud (state every 120 s; energy every 2 h at :07 past even
+hours; p=3/p=4 backfill daily 02:10), stores it in Postgres `dobarboiler` (shared-postgres), splits kWh into cheap
+(00–08 h) and expensive tariff, attributes every change (`app` / `external` / `firmware` / `firmware_eco` /
+`unknown`) and serves REST `/api/v1` (phone app) and MCP `/mcp` (agents), both behind `BOILER_API_TOKEN`.
+**It never sends a command to the boiler**: `boilerd/ariston.py` has only GETs plus the login POST — keep it that way.
+Design `docs/superpowers/specs/2026-10-18-boiler-history-mcp-ux-design.md`, operations `server/README.md`.
+
+```bash
+bash server/ops/create-db.sh --test && bash server/ops/pytest.sh -q   # tests (disposable DB dobarboiler_test)
+bash server/ops/go-live.sh                                             # deploy, after SSM /dev/dobarboiler-server/env exists
+docker compose -f server/docker-compose.yml up -d --build              # redeploy
+```
+
+- Container `dobarboiler-boilerd` on `127.0.0.1:8020`; tailnet `http://novica-dev/boiler/` (preview `boiler`);
+  Grafana dashboard `http://novica-dev:3300/d/dobarboiler`; nightly backup `dobarboiler-backup.timer` 03:50 →
+  restic `dev-box/dobarboiler`.
+- Server secrets live in SSM `/dev/dobarboiler-server/env` (created once by Novica with `server/ops/add-secrets.ps1`);
+  the container also gets `dobarboiler.env` through `env_file`. Do not source either file in shell commands.
+- `consSequencesApi8` semantics (verified live): `p=1` = 24 closed **2 h** buckets aligned to even local hours,
+  `p=3` = previous + current month by day up to yesterday, `p=4` = months ending with the last completed one.
+- The pytest suite truncates `dobarboiler_test`; never point a running container at it while tests run.
 
 ## Where the truth lives
 
