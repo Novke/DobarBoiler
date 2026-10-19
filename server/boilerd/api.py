@@ -153,12 +153,11 @@ async def get_report(request: Request, month: str) -> dict:
     return {"json": rep.json, "markdown": rep.markdown}
 
 
-async def health_data(request: Request) -> dict:
-    async with request.app.state.pool.connection() as conn:
+async def health_snapshot(pool, poller) -> dict:
+    async with pool.connection() as conn:
         last_state = (await (await conn.execute("SELECT max(at) FROM state_sample")).fetchone())[0]
         last_energy = (await (await conn.execute("SELECT max(last_seen_at) FROM energy_2h")).fetchone())[0]
     paused = None
-    poller = getattr(request.app.state, "poller", None)
     if poller is not None:
         left = poller.client.paused_until - _time.monotonic()
         if left > 0:
@@ -172,4 +171,4 @@ async def health_data(request: Request) -> dict:
 
 @router.get("/health")
 async def get_health(request: Request) -> dict:
-    return await health_data(request)
+    return await health_snapshot(request.app.state.pool, getattr(request.app.state, "poller", None))
