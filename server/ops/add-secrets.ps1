@@ -16,11 +16,26 @@ function New-Hex([int]$bytes) {
     ($b | ForEach-Object { $_.ToString("x2") }) -join ""
 }
 
+# Windows PowerShell 5.1 turns every stderr line of a native command into a terminating error under
+# $ErrorActionPreference = "Stop" (even with 2>$null), so aws runs with "Continue" and its stderr is
+# collected instead. Returns the exit code, stdout (may hold secret values, never printed) and stderr.
+function Invoke-Aws([string[]]$awsArgs) {
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { $out = & aws @awsArgs 2>&1 } finally { $ErrorActionPreference = $eap }
+    $code = $LASTEXITCODE
+    $err = @($out | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } |
+        ForEach-Object { $_.ToString() }) -join "`n"
+    $std = @($out | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] }) -join "`n"
+    [pscustomobject]@{ Code = $code; Out = $std; Err = $err.Trim() }
+}
+
 function Get-Param([string]$name) {
-    $value = aws --profile $AwsProfile ssm get-parameter --name $name --with-decryption `
-        --query Parameter.Value --output text 2>$null
-    if ($LASTEXITCODE -ne 0) { return $null }
-    return ($value -join "`n")
+    $r = Invoke-Aws @("--profile", $AwsProfile, "ssm", "get-parameter", "--name", $name,
+                      "--with-decryption", "--query", "Parameter.Value", "--output", "text")
+    if ($r.Code -eq 0) { return $r.Out }
+    if ($r.Err -match "ParameterNotFound") { return $null }
+    throw "get-parameter $name failed: $($r.Err)"
 }
 
 function Set-Param([string]$name, [string]$value, [bool]$overwrite) {
@@ -30,8 +45,8 @@ function Set-Param([string]$name, [string]$value, [bool]$overwrite) {
         $awsArgs = @("--profile", $AwsProfile, "ssm", "put-parameter", "--name", $name,
                      "--type", "SecureString", "--value", "file://$tmp")
         if ($overwrite) { $awsArgs += "--overwrite" }
-        aws @awsArgs | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "put-parameter $name failed" }
+        $r = Invoke-Aws $awsArgs
+        if ($r.Code -ne 0) { throw "put-parameter $name failed: $($r.Err)" }
     } finally { Remove-Item $tmp -Force }
 }
 
