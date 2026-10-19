@@ -128,6 +128,25 @@
     <string name="set_boost_timeout">Maksimalno trajanje boosta</string>
     <string name="set_account">Nalog</string>
     <string name="set_health">Pouzdanost</string>
+    <string name="srv_title">Server istorije</string>
+    <string name="srv_url">Adresa servera</string>
+    <string name="srv_token">Token</string>
+    <string name="srv_show">Prikaži token</string>
+    <string name="srv_hide">Sakrij token</string>
+    <string name="srv_save">Sačuvaj</string>
+    <string name="srv_saved">Sačuvano</string>
+    <string name="srv_test">Testiraj vezu</string>
+    <string name="srv_status_none">Server nije podešen</string>
+    <string name="srv_status_never">Još ništa nije poslato</string>
+    <string name="srv_status_ok">Poslednje slanje: pre %1$s</string>
+    <string name="srv_status_error">Greška: %1$s</string>
+    <string name="srv_test_ok">Veza radi, poslednje stanje bojlera pre %1$s</string>
+    <string name="srv_test_ok_nostate">Veza radi, server još nema stanje bojlera</string>
+    <string name="srv_test_fail">Veza ne radi: %1$s</string>
+    <string name="srv_ago_min">%1$d min</string>
+    <string name="srv_ago_h">%1$d h</string>
+    <string name="srv_ago_d">%1$d dana</string>
+    <string name="srv_help">Server radi preko Tailscale mreže. Bez nje aplikacija radi kao i do sada, a zapisi se šalju kad veza proradi.</string>
     <string name="set_logout">Odjavi se</string>
 
     <!-- Health -->
