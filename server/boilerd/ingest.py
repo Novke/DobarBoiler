@@ -199,3 +199,15 @@ async def import_probe_log(conn: AsyncConnection, path: Path, tz: ZoneInfo) -> i
                 await store_consumption(conn, r["body"], at, tz)
                 n += 1
     return n
+
+
+async def tariff_at(conn: AsyncConnection, at: datetime) -> "Tariff":
+    from .buckets import Tariff
+    row = await (await conn.execute(
+        "SELECT cheap_start, cheap_end, cheap_price, expensive_price, zone FROM tariff "
+        "WHERE valid_from <= %s::date ORDER BY valid_from DESC LIMIT 1", (at,))).fetchone()
+    if row is None:
+        row = await (await conn.execute(
+            "SELECT cheap_start, cheap_end, cheap_price, expensive_price, zone FROM tariff "
+            "ORDER BY valid_from LIMIT 1")).fetchone()
+    return Tariff(*row)
