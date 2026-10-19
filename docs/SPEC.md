@@ -475,10 +475,12 @@ class CredentialStore(context: android.content.Context) : rs.novica.dobarboiler.
     override fun token(): String?
     override fun storeToken(token: String?)
     fun storeCredentials(email: String, password: String)
-    fun clear()                                  // logout
+    fun clear()                                  // logout (keeps the history-server URL/token)
     fun isLoggedIn(): Boolean
     var gwId: String?                            // selected device gateway id
     var deviceName: String?
+    var historyServerUrl: String?                // history server (design 2026-10-18 §5.2), e.g. http://novica-dev/boiler/
+    var historyServerToken: String?              // BOILER_API_TOKEN
 }
 ```
 
@@ -787,6 +789,7 @@ caps and no added value.
 | `RescheduleWorker` | `converge(Triggers.BOOT, pollFresh = true)`. Covers reboot, update, clock/zone change, exact-alarm permission regrant. Vacation return survives reboot because it's a Room row + re-armed alarm. |
 | `WatchdogWorker` | periodic 6 h, unique `"watchdog"`, KEEP, requires network. Checks: transition alarm armed & `nextTransitionAt` in future (else `converge(WATCHDOG)`); `canScheduleExact()`; notification permission; prunes logs/samples; if `nextTransitionAt < now` → missed alarm → converge. |
 | `BandWorker` | advanced mode tick: `device.refresh(ZERO)`; if Band config active and desired source is window: `temp >= stopAt` → `SetPower(false)`; `temp <= restartAt` → `SetPower(true)`; then re-arm `armBandTick(now + pollEvery)` while still inside window. In Simple mode (mid-window check) it only polls + manual-change detection via `converge(Triggers.BAND, pollFresh=false)`-style verify. |
+| `ServerSyncWorker` | History-server upload (design `docs/superpowers/specs/2026-10-18-boiler-history-mcp-ux-design.md` §5.1). One-time unique `"server_sync"` (REPLACE, 15 s delay, network) enqueued after every `converge()` outside the mutex, plus periodic 1 h `"server_sync_periodic"` (KEEP). Runs `ServerSync.run()`: `action_log` rows with `id > lastUploadedActionId` in batches of 200 to `POST api/v1/app/actions` (mark advances only after 2xx; the server is idempotent on `(install_id, local_id)`), then the latest intent (`Converger` stores `IntentCodec.encode(res, now)` via `SettingsStore.recordIntent`, deduplicated without its timestamp) to `POST api/v1/app/intent`. No server configured → no-op. Failures: `Result.retry()` up to 5 attempts, never a notification and never an `action_log` row; shown only under Settings → Server istorije. Sync state lives in DataStore keys `rt_install_id`, `rt_last_uploaded_action_id`, `rt_last_intent_json`, `rt_last_intent_uploaded_json`, `rt_last_sync_ok_at`, `rt_last_sync_error` (no Room change). |
 | `BoostTimeoutWorker` | if active boost uncompleted → `schedule.completeBoost(id, "TIMEOUT")`, `converge(Triggers.BOOST)`, `notifier.boostTimeout(temp)`. Guards against a dead BoostService. |
 
 ### 6.5 BoostService (foreground, `specialUse`)
@@ -887,7 +890,7 @@ snackbar on failure).
 | `presets`, `presets/edit/{id?}` | `PresetsScreen`, `PresetEditScreen` / VMs | list + edit `{name, temp, eco, windowOverride?, validationError}`; delete blocked while in plan |
 | `overrides` | `OverridesScreen` / `OverridesViewModel` | `{active, upcoming, expiredRecent}` with cancel actions |
 | `history` | `HistoryScreen` / `HistoryViewModel` | `Flow<List<HistoryEntry>>` grouped by day, icons ✓/⚠/✕ |
-| `settings` (+ `settings/window`, `settings/advanced`, `settings/account`, `settings/health`) | `SettingsScreen` / `SettingsViewModel` | `{windowStart, windowEnd, outsideWindow, keepWarmTemp, bandEnabled, stopAt, restartAt, bandPollMinutes, heatRate, learnedRate?, learnedEcoRate?, safetyMarginPercent, boostMaxHours, manualPolicy, reassertMinutes, midWindowCheck, maxSetpoint, accountEmail, healthIssues, zoneId}` |
+| `settings` (+ `settings/window`, `settings/advanced`, `settings/account`, `settings/health`, `settings/server` → `SettingsServerScreen` / `ServerSettingsViewModel`: URL, token, test connection, upload status) | `SettingsScreen` / `SettingsViewModel` | `{windowStart, windowEnd, outsideWindow, keepWarmTemp, bandEnabled, stopAt, restartAt, bandPollMinutes, heatRate, learnedRate?, learnedEcoRate?, safetyMarginPercent, boostMaxHours, manualPolicy, reassertMinutes, midWindowCheck, maxSetpoint, accountEmail, healthIssues, zoneId}` |
 
 Dashboard composition (child composables, state hoisted from `DashboardViewModel`):
 `PermissionsHealthCard` (only when issues; errorContainer), `TempDialSection` (big circle: `temp` large,
