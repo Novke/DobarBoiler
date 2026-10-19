@@ -1,0 +1,20 @@
+{
+ "ts": "2026-10-18T01:09:17+02:00",
+ "kind": "state",
+ "status": 200,
+ "body": {
+  "gw": "80646F26422C",
+  "on": true,
+  "mode": 1,
+  "temp": 44.0,
+  "procReqTemp": 55.0,
+  "reqTemp": 55.0,
+  "antiLeg": false,
+  "heatReq": true,
+  "eco": true,
+  "rmTm": "01:05:00",
+  "avShw": 1,
+  "pwrOpt": false,
+  "eco_version": 0
+ }
+}
