@@ -180,6 +180,8 @@ class Poller:
         await self._store_consumption(t)
 
     async def _job_backfill(self, t: datetime) -> None:
+        if self.last_run.get("energy") == t:  # the same response already carried p=3/p=4 this tick
+            return
         await self._store_consumption(t)
 
     async def _job_crosscheck(self, t: datetime) -> None:

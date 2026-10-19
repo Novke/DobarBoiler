@@ -143,3 +143,10 @@ async def test_new_bus_error_becomes_event(db, clock):
     clock.t += timedelta(hours=1)
     await p.tick()
     assert await events(db, "device_error") == 1
+
+
+async def test_first_tick_reads_consumption_once(db, clock):
+    c = FakeClient()
+    p = Poller(c, db, settings(), clock)
+    await p.tick()
+    assert c.calls.count("consumption") == 1

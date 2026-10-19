@@ -1,0 +1,28 @@
+# DobarBoiler history server (design docs/superpowers/specs/2026-10-18-boiler-history-mcp-ux-design.md §4.1).
+#   docker compose -f server/docker-compose.yml up -d --build
+# Reached on the tailnet as http://novica-dev/boiler/ (preview add boiler 8020). Never publish without 127.0.0.1.
+name: dobarboiler
+services:
+  boilerd:
+    build: .
+    image: dobarboiler-boilerd:latest
+    container_name: dobarboiler-boilerd
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8020:8020"
+    env_file:
+      - /data/secrets/dobarboiler.env
+      - /data/secrets/dobarboiler-server.env
+    environment:
+      DB_HOST: shared-postgres
+      BOILERD_PROBE_LOG: /probe/log.jsonl
+      TZ: Europe/Belgrade
+    volumes:
+      - /data/tmp/boiler-probe:/probe:ro
+    networks:
+      - dev-shared
+    cpus: 0.5
+    mem_limit: 256m
+networks:
+  dev-shared:
+    external: true

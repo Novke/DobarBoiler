@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Noćni backup istorije bojlera u S3 (restic): pg_dump baze dobarboiler.
+# Kredencijali: instance rola (S3), lozinka repoa iz /data/secrets/restic.env (SSM /dev/restic/env).
+# Rotacija: 7 dnevnih, 4 nedeljna, 6 mesečnih. Instalira se u /usr/local/bin (vidi server/README.md).
+set -euo pipefail
+set -a; . /data/secrets/restic.env; set +a
+export RESTIC_REPOSITORY="s3:s3.eu-central-1.amazonaws.com/novica-backups-472639330074/dev-box/dobarboiler"
+export RESTIC_CACHE_DIR=/data/tmp/restic-cache
+WORK=/data/tmp/dobarboiler-backup
+mkdir -p "$WORK"; chmod 700 "$WORK"
+trap 'rm -f "$WORK/dobarboiler.dump"' EXIT
+
+docker exec shared-postgres pg_dump -U postgres -Fc dobarboiler > "$WORK/dobarboiler.dump"
+[ -s "$WORK/dobarboiler.dump" ] || { echo "pg_dump je prazan" >&2; exit 1; }
+
+restic snapshots --quiet >/dev/null 2>&1 || restic init
+restic backup --tag dobarboiler --host novica-dev "$WORK/dobarboiler.dump"
+restic forget --tag dobarboiler --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+date -Is > /data/tmp/dobarboiler-backup.last-ok
