@@ -135,7 +135,7 @@ class Converger(
     /** The whole app's heartbeat. Safe to call from anywhere, any time. */
     suspend fun converge(trigger: String, pollFresh: Boolean = true): ConvergeOutcome =
         convergeMutex.withLock { convergeLocked(trigger, pollFresh) }
-            .also { ServerSyncWorker.enqueueSoon(alarms.context) } // outside the lock; no-op without a server
+            .also { runCatching { ServerSyncWorker.enqueueSoon(alarms.context) } } // outside the lock; must never fail a converge
 
     private suspend fun convergeLocked(trigger: String, pollFresh: Boolean): ConvergeOutcome {
         // 1. Not onboarded → nothing to do.

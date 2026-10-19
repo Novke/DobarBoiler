@@ -40,6 +40,11 @@ class HistoryApiClient(
 
     suspend fun health(): HealthDto = decode(HealthDto.serializer(), send("api/v1/health", null))
 
+    /** Proves the token: an empty, authenticated upload that the server accepts without writing anything. */
+    suspend fun checkToken(installId: String) {
+        postActions(ActionsBatch(installId, emptyList()))
+    }
+
     private fun <T> body(serializer: SerializationStrategy<T>, value: T): RequestBody =
         json.encodeToString(serializer, value).toRequestBody(jsonType)
 

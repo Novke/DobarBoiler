@@ -96,6 +96,18 @@ sealed interface TestResult {
     data class Failed(val message: String) : TestResult
 }
 
+/** "Testiraj vezu": reachability plus, via an authenticated call, the token itself. */
+suspend fun testConnection(client: HistoryApiClient, now: Instant): TestResult = try {
+    client.checkToken("connection-test")  // /health is public, so it alone cannot catch a wrong token
+    val health = client.health()
+    val ago = health.lastStateAt?.let {
+        runCatching { Duration.between(java.time.OffsetDateTime.parse(it).toInstant(), now) }.getOrNull()
+    }
+    TestResult.Ok(ago)
+} catch (e: Exception) {
+    TestResult.Failed(e.message ?: e.javaClass.simpleName)
+}
+
 class ServerSettingsViewModel(app: Application, container: AppContainer) : ContainerViewModel(app, container) {
 
     val status: StateFlow<ServerStatus> = container.settings.sync
@@ -122,16 +134,10 @@ class ServerSettingsViewModel(app: Application, container: AppContainer) : Conta
     fun test(url: String, token: String) {
         testing = true
         viewModelScope.launch {
-            testResult = try {
-                val health = HistoryApiClient(url, token.trim(), Json { ignoreUnknownKeys = true }).health()
-                val ago = health.lastStateAt?.let {
-                    runCatching { Duration.between(java.time.OffsetDateTime.parse(it).toInstant(), container.clock.instant()) }
-                        .getOrNull()
-                }
-                TestResult.Ok(ago)
-            } catch (e: Exception) {
-                TestResult.Failed(e.message ?: e.javaClass.simpleName)
-            }
+            testResult = testConnection(
+                HistoryApiClient(url, token.trim(), Json { ignoreUnknownKeys = true }),
+                container.clock.instant(),
+            )
             testing = false
         }
     }

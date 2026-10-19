@@ -1,5 +1,8 @@
 package rs.novica.dobarboiler.data
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -141,5 +144,21 @@ class ServerSyncTest {
         assertTrue(!IntentCodec.sameIntent(IntentCodec.encode(resolution(), at),
             IntentCodec.encode(resolution(StateSource.WEEKLY_PLAN), at)))
         assertNull(IntentCodec.decode("not json"))
+    }
+
+    private class SlowStore(var state: SyncState = SyncState()) : SyncStateStore {
+        override suspend fun syncState(): SyncState { delay(10); return state }
+        override suspend fun updateSync(transform: (SyncState) -> SyncState) { delay(10); state = transform(state) }
+    }
+
+    @Test fun concurrentRunsShareOneInstallIdAndNeverMoveTheMarkBack() = runTest {
+        val store = SlowStore()
+        val s = sync(rows(1L..3L), store)
+        listOf(async { s.run() }, async { s.run() }).awaitAll()
+        val ids = actionPosts().map { json.parseToJsonElement(it.second).jsonObject["install_id"]!!.jsonPrimitive.content }
+        assertTrue(ids.isNotEmpty())
+        assertEquals(1, ids.toSet().size)
+        assertEquals(ids[0], store.state.installId)
+        assertEquals(3L, store.state.lastUploadedActionId)
     }
 }

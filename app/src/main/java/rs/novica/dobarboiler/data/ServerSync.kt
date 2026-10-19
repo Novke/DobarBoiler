@@ -1,5 +1,7 @@
 package rs.novica.dobarboiler.data
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import rs.novica.dobarboiler.api.ActionDto
@@ -87,12 +89,17 @@ class ServerSync(
         const val BATCH = 200
     }
 
-    suspend fun run(): SyncResult {
+    /** The one-time and the periodic worker share this singleton; one upload at a time. */
+    private val mutex = Mutex()
+
+    suspend fun run(): SyncResult = mutex.withLock { runLocked() }
+
+    private suspend fun runLocked(): SyncResult {
         val client = clientFactory() ?: return SyncResult.NotConfigured
+        val fresh = UUID.randomUUID().toString()
+        store.updateSync { if (it.installId == null) it.copy(installId = fresh) else it }
         var state = store.syncState()
-        val installId = state.installId ?: UUID.randomUUID().toString().also { id ->
-            store.updateSync { it.copy(installId = id) }
-        }
+        val installId = state.installId ?: fresh
         var sent = 0
         var intentSent = false
         return try {
@@ -101,7 +108,7 @@ class ServerSync(
                 if (rows.isEmpty()) break
                 client.postActions(ActionsBatch(installId, rows.map { it.toDto() }))
                 val mark = rows.maxOf { it.id }
-                store.updateSync { it.copy(lastUploadedActionId = mark) }
+                store.updateSync { it.copy(lastUploadedActionId = maxOf(it.lastUploadedActionId, mark)) }
                 state = store.syncState()
                 sent += rows.size
                 if (rows.size < BATCH) break
