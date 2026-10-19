@@ -48,8 +48,33 @@ class CredentialStore(context: Context) : CredentialProvider {
         putString(KEY_PASSWORD, password)
     }
 
-    /** Logout: wipes credentials, token AND the device selection. */
-    fun clear() = prefs.edit { clear() }
+    /**
+     * Logout: wipes Ariston credentials, token AND the device selection. The history-server address and token
+     * are independent of the Ariston account and survive a logout.
+     */
+    fun clear() {
+        val url = historyServerUrl
+        val token = historyServerToken
+        prefs.edit {
+            clear()
+            if (url != null) putString(KEY_HISTORY_URL, url)
+            if (token != null) putString(KEY_HISTORY_TOKEN, token)
+        }
+    }
+
+    /** History server base URL (design §5.2), e.g. `http://novica-dev/boiler/`; null = not configured. */
+    var historyServerUrl: String?
+        get() = prefs.getString(KEY_HISTORY_URL, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit {
+            if (value.isNullOrBlank()) remove(KEY_HISTORY_URL) else putString(KEY_HISTORY_URL, value.trim())
+        }
+
+    /** Bearer token for the history server (`BOILER_API_TOKEN`); null = not configured. */
+    var historyServerToken: String?
+        get() = prefs.getString(KEY_HISTORY_TOKEN, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit {
+            if (value.isNullOrBlank()) remove(KEY_HISTORY_TOKEN) else putString(KEY_HISTORY_TOKEN, value.trim())
+        }
 
     fun isLoggedIn(): Boolean = credentials() != null
 
@@ -74,5 +99,7 @@ class CredentialStore(context: Context) : CredentialProvider {
         const val KEY_TOKEN = "token"
         const val KEY_GW_ID = "gwId"
         const val KEY_DEVICE_NAME = "deviceName"
+        const val KEY_HISTORY_URL = "history_url"
+        const val KEY_HISTORY_TOKEN = "history_token"
     }
 }

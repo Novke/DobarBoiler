@@ -27,9 +27,11 @@ by polling.
 
 ## Commands
 
-The Gradle wrapper is **not committed** (only `gradle/wrapper/gradle-wrapper.properties`, Gradle 8.14.3) and this
-box has **no Android SDK and no Gradle** yet, so nothing builds here until both are installed
-(`gradle wrapper` once, SDK `platforms;android-35` + build-tools, `sdk.dir` in `local.properties`). JDK 21 is present.
+The Gradle wrapper (8.14.3) is committed. On novica-dev the Android SDK lives in `/data/android-sdk`
+(`platforms;android-35`, `build-tools;35.0.0`, `platform-tools`, installed 2026-10-19); each checkout or worktree
+needs a gitignored `local.properties` with `sdk.dir=/data/android-sdk`. `~/.gradle` is a symlink to
+`/data/gradle-home` because the root disk is small. JDK 21. A cold build takes ~10 min; use `--no-daemon` for
+one-off runs.
 
 ```bash
 ./gradlew assembleDebug                      # debug APK

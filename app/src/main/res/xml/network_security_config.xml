@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext only to the history server on the tailnet (traffic is already inside the WireGuard tunnel). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">novica-dev</domain>
+    </domain-config>
+</network-security-config>

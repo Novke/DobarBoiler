@@ -44,6 +44,7 @@ import rs.novica.dobarboiler.ui.settings.SettingsAccountScreen
 import rs.novica.dobarboiler.ui.settings.SettingsAdvancedScreen
 import rs.novica.dobarboiler.ui.settings.SettingsHealthScreen
 import rs.novica.dobarboiler.ui.settings.SettingsRootScreen
+import rs.novica.dobarboiler.ui.settings.SettingsServerScreen
 import rs.novica.dobarboiler.ui.settings.SettingsWindowScreen
 
 /** Route constants (SPEC §8 route table). */
@@ -60,6 +61,7 @@ object Routes {
     const val SETTINGS_ADVANCED = "settings/advanced"
     const val SETTINGS_ACCOUNT = "settings/account"
     const val SETTINGS_HEALTH = "settings/health"
+    const val SETTINGS_SERVER = "settings/server"
     const val SHEET_BOOST = "boost"
     const val DIALOG_VACATION = "vacation"
     const val SHEET_DAY_OVERRIDE = "override/day"
@@ -234,9 +236,11 @@ fun AppRoot(
                     onOpenHealth = { navController.navigate(Routes.SETTINGS_HEALTH) },
                     onOpenHistory = { navController.navigate(Routes.HISTORY) },
                     onOpenOverrides = { navController.navigate(Routes.OVERRIDES) },
+                    onOpenServer = { navController.navigate(Routes.SETTINGS_SERVER) },
                 )
             }
 
+            composable(Routes.SETTINGS_SERVER) { SettingsServerScreen() }
             composable(Routes.SETTINGS_WINDOW) { SettingsWindowScreen() }
             composable(Routes.SETTINGS_ADVANCED) { SettingsAdvancedScreen() }
             composable(Routes.SETTINGS_ACCOUNT) {

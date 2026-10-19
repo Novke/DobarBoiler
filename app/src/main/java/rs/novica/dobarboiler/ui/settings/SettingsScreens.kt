@@ -277,7 +277,10 @@ fun SettingsRootScreen(
     onOpenHealth: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenOverrides: () -> Unit,
+    onOpenServer: () -> Unit,
 ) {
+    val serverVm = containerViewModel { app, container -> ServerSettingsViewModel(app, container) }
+    val serverStatusNow by serverVm.status.collectAsState()
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.settings_title)) }) },
     ) { padding ->
@@ -292,6 +295,7 @@ fun SettingsRootScreen(
             SettingsNavItem(stringResource(R.string.ot_title), onOpenOverrides)
             SettingsNavItem(stringResource(R.string.history_title), onOpenHistory)
             SettingsNavItem(stringResource(R.string.set_health), onOpenHealth)
+            SettingsNavItem(stringResource(R.string.srv_title), onOpenServer, serverStatusLabel(serverStatusNow))
             SettingsNavItem(stringResource(R.string.set_account), onOpenAccount)
         }
     }
@@ -622,6 +626,13 @@ fun SettingsHealthScreen() {
                     }
                 }
             }
+            val serverVm = containerViewModel { app, container -> ServerSettingsViewModel(app, container) }
+            val srv by serverVm.status.collectAsState()
+            Spacer(Modifier.height(16.dp))
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.srv_title)) },
+                supportingContent = { Text(serverStatusLabel(srv)) },
+            )
         }
     }
 }

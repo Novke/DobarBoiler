@@ -36,6 +36,9 @@ class ActionLogRepository(db: AppDatabase) {
 
     fun recent(limit: Int = 300): Flow<List<ActionLogEntity>> = dao.recent(limit)
 
+    /** For the history-server upload: rows with id > [afterId], oldest first. */
+    suspend fun after(afterId: Long, limit: Int): List<ActionLogEntity> = dao.after(afterId, limit)
+
     /** SPEC §4.2 prune policy: drop entries older than 90 days (WatchdogWorker). */
     suspend fun prune(olderThanDays: Int = 90) {
         dao.pruneBefore(Instant.now().minus(Duration.ofDays(olderThanDays.toLong())))
