@@ -1,0 +1,439 @@
+{
+ "uid": "dobarboiler",
+ "title": "DobarBoiler: bojler",
+ "tags": [
+  "dobarboiler"
+ ],
+ "timezone": "Europe/Belgrade",
+ "schemaVersion": 41,
+ "version": 1,
+ "refresh": "2m",
+ "time": {
+  "from": "now-2d",
+  "to": "now"
+ },
+ "panels": [
+  {
+   "id": 1,
+   "title": "Temperatura vode i cilj",
+   "type": "timeseries",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 16,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "time_series",
+     "rawSql": "SELECT at AS \"time\", temp AS \"voda\", req_temp AS \"cilj\" FROM state_sample WHERE $__timeFilter(at) ORDER BY at"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "celsius",
+     "custom": {
+      "lineWidth": 2,
+      "spanNulls": 600000
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "voda"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#1B2430"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "cilj"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#D75A28"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": 2,
+   "title": "Sada",
+   "type": "stat",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 0,
+    "w": 8,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "SELECT temp AS \"voda\", req_temp AS \"cilj\", CASE WHEN heat_req THEN 1 ELSE 0 END AS \"greje\" FROM state_sample ORDER BY at DESC LIMIT 1"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "celsius"
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "greje"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "none"
+       },
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "0": {
+            "text": "ne"
+           },
+           "1": {
+            "text": "da",
+            "color": "#D75A28"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": 3,
+   "title": "Grejač i eco",
+   "type": "state-timeline",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 9,
+    "w": 24,
+    "h": 5
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "time_series",
+     "rawSql": "SELECT at AS \"time\", CASE WHEN heat_req THEN 1 ELSE 0 END AS \"grejač\", CASE WHEN eco THEN 1 ELSE 0 END AS \"eco\", CASE WHEN \"on\" THEN 1 ELSE 0 END AS \"uključen\" FROM state_sample WHERE $__timeFilter(at) ORDER BY at"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "0": {
+         "text": "ne",
+         "color": "#E1E6EB"
+        },
+        "1": {
+         "text": "da",
+         "color": "#D75A28"
+        }
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "title": "Potrošnja po 2 h: jeftino i skupo",
+   "type": "barchart",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 14,
+    "w": 24,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "SELECT to_char(bucket_start AT TIME ZONE 'Europe/Belgrade', 'DD.MM. HH24\"h\"') AS \"period\", CASE WHEN extract(hour FROM bucket_start AT TIME ZONE 'Europe/Belgrade') < 8 THEN kwh ELSE 0 END AS \"jeftino\", CASE WHEN extract(hour FROM bucket_start AT TIME ZONE 'Europe/Belgrade') >= 8 THEN kwh ELSE 0 END AS \"skupo\" FROM energy_2h WHERE $__timeFilter(bucket_start) ORDER BY bucket_start"
+    }
+   ],
+   "options": {
+    "stacking": "normal",
+    "xTickLabelRotation": -45,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list"
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "custom": {
+      "fillOpacity": 90,
+      "lineWidth": 0
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "jeftino"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#4152B8"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "skupo"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#C27C0E"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": 5,
+   "title": "Dnevna potrošnja",
+   "type": "barchart",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 23,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "SELECT to_char(day, 'DD.MM.') AS \"dan\", kwh AS \"kWh\" FROM energy_day WHERE day >= ($__timeFrom())::date - 30 ORDER BY day"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "custom": {
+      "fillOpacity": 90,
+      "lineWidth": 0
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "kWh"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#556070"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": 6,
+   "title": "Mesečna potrošnja",
+   "type": "barchart",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 23,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "SELECT to_char(month, 'MM.YYYY') AS \"mesec\", kwh AS \"kWh\" FROM energy_month WHERE month >= (SELECT min(month) FROM energy_month WHERE kwh > 0) ORDER BY month"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "custom": {
+      "fillOpacity": 90,
+      "lineWidth": 0
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "kWh"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#556070"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": 7,
+   "title": "Događaji i ko ih je izazvao",
+   "type": "table",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 31,
+    "w": 16,
+    "h": 10
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "SELECT to_char(at AT TIME ZONE 'Europe/Belgrade', 'DD.MM. HH24:MI') AS \"vreme\", kind AS \"događaj\", CASE attribution WHEN 'app' THEN 'aplikacija' WHEN 'external' THEN 'spolja (Ariston app / dugme)' WHEN 'firmware' THEN 'bojler, termostat' WHEN 'firmware_eco' THEN 'bojler, eco' WHEN 'unknown' THEN 'nepoznato' ELSE '' END AS \"uzrok\", detail::text AS \"detalji\" FROM event WHERE $__timeFilter(at) ORDER BY at DESC LIMIT 200"
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "title": "Zdravlje pollera (24 h)",
+   "type": "table",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 31,
+    "w": 8,
+    "h": 10
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "SELECT endpoint, count(*) AS poziva, count(*) FILTER (WHERE error IS NOT NULL) AS gresaka, count(*) FILTER (WHERE status = 429) AS \"429\", round(avg(ms)) AS \"ms prosek\", to_char(max(at) AT TIME ZONE 'Europe/Belgrade', 'DD.MM. HH24:MI') AS poslednji FROM poll_log WHERE at > now() - interval '24 hours' GROUP BY endpoint ORDER BY endpoint"
+    }
+   ]
+  }
+ ],
+ "editable": true
+}

@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="sr-Latn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DobarBoiler: maketa novog UX-a</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --enamel: #F2F5F7;      /* pozadina: emajl bojlera, ne krem */
+    --card: #FFFFFF;
+    --ink: #1B2430;
+    --ink-2: #556070;
+    --ink-3: #8A94A3;
+    --line: #E1E6EB;
+    --night: #4152B8;       /* jeftina tarifa = noć */
+    --night-soft: #E4E8FA;
+    --day: #C27C0E;         /* skupa tarifa = dan */
+    --day-soft: #FBEFD9;
+    --heat: #D75A28;        /* identitet aplikacije, grejač */
+    --outside: #A3326A;     /* spoljna promena */
+    --outside-soft: #F8E3EE;
+    --ok: #2F7D5B;
+    --r-lg: 28px; --r-md: 18px; --r-sm: 12px;
+  }
+  .dark {
+    --enamel: #15191E; --card: #1F252C; --ink: #EEF1F4; --ink-2: #AAB3BF; --ink-3: #7C8694;
+    --line: #2C343D; --night: #7484E8; --night-soft: #262D4A; --day: #BF8016; --day-soft: #3A2F1C;
+    --heat: #F07A45; --outside: #E07BAA; --outside-soft: #3B2230; --ok: #5FBF91;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Onest", system-ui, sans-serif; color: #1B2430;
+    background: #DCE2E8; font-feature-settings: "tnum";
+  }
+  .intro { max-width: 68ch; margin: 40px auto 8px; padding: 0 20px; line-height: 1.55; }
+  .intro h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .intro p { margin: 0 0 10px; color: #3D4755; }
+  .legend-row { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.9rem; color: #3D4755; margin-top: 6px; }
+  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 4px; vertical-align: -1px; margin-right: 6px; }
+
+  .wall { display: flex; flex-wrap: wrap; gap: 36px; justify-content: center; padding: 28px 16px 64px; }
+  figure { margin: 0; width: min(360px, 100%); }
+  figcaption { font-size: 0.92rem; color: #3D4755; line-height: 1.5; margin-top: 12px; padding: 0 6px; }
+  figcaption b { color: #1B2430; }
+
+  .phone {
+    background: var(--enamel); color: var(--ink); border-radius: 36px; overflow: hidden;
+    box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 18px 40px -18px rgba(20,30,45,.45);
+    border: 8px solid #10151B; display: flex; flex-direction: column; min-height: 760px;
+  }
+  .status { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); padding: 10px 22px 4px; }
+  .screen { flex: 1; padding: 6px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 0; }
+  .topbar h2 { font-size: 22px; margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  .icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); }
+  .card { background: var(--card); border-radius: var(--r-md); padding: 14px 16px; }
+  .muted { color: var(--ink-2); }
+  .small { font-size: 13px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .grow { flex: 1; }
+
+  /* Merač */
+  .gauge { position: relative; display: grid; place-items: center; margin-top: 2px; }
+  .gauge svg { display: block; }
+  .gauge .center { position: absolute; left: 0; right: 0; top: 78px; text-align: center; }
+  .gauge .sub { margin-top: -2px; text-align: center; }
+  .temp { font-size: 68px; font-weight: 600; line-height: 1; letter-spacing: -0.04em; }
+  .temp sup { font-size: 26px; font-weight: 500; vertical-align: 38px; margin-left: 2px; letter-spacing: 0; }
+  .state { margin-top: 6px; font-size: 15px; font-weight: 500; color: var(--heat); display: inline-flex; gap: 6px; align-items: center; }
+  .state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--heat); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: .35; transform: scale(.7);} }
+  @media (prefers-reduced-motion: reduce) { .state .dot { animation: none; } }
+  .sub { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+
+  /* Traka dana: pamtljivi element */
+  .ribbon { position: relative; height: 34px; border-radius: 10px; overflow: hidden; display: flex; }
+  .ribbon .night { background: var(--night); }
+  .ribbon .dayp { background: var(--day-soft); }
+  .ribbon .win { position: absolute; top: 7px; bottom: 7px; border-radius: 6px; background: rgba(255,255,255,.22); border: 1.5px dashed rgba(255,255,255,.85); }
+  .ribbon .actual { position: absolute; bottom: 0; height: 5px; background: var(--heat); border-radius: 3px 3px 0 0; }
+  .ribbon .now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }
+  .ribbon .now::after { content: ""; position: absolute; top: -3px; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+  .hours { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); margin-top: 5px; }
+  .ribbon-cap { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-2); margin-bottom: 8px; }
+
+  .reason { display: flex; gap: 12px; align-items: flex-start; }
+  .reason .chip { flex: none; width: 36px; height: 36px; border-radius: 12px; background: var(--night-soft); color: var(--night); display: grid; place-items: center; }
+  .reason p { margin: 0; line-height: 1.4; font-size: 14.5px; }
+  .reason p + p { margin-top: 2px; }
+
+  .alert { background: var(--outside-soft); border-radius: var(--r-md); padding: 12px 14px; }
+  .alert .title { color: var(--outside); font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .alert p { margin: 4px 0 10px; font-size: 13.5px; line-height: 1.4; }
+  .btns { display: flex; gap: 8px; }
+  .btn { border: 0; border-radius: 999px; padding: 9px 14px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  .btn.solid { background: var(--outside); color: #fff; }
+  .btn.ghost { background: transparent; color: var(--outside); box-shadow: inset 0 0 0 1.5px var(--outside); }
+  .btn:focus-visible, .seg button:focus-visible, .act:focus-visible { outline: 3px solid var(--night); outline-offset: 2px; }
+
+  .split { height: 10px; border-radius: 6px; display: flex; gap: 2px; overflow: hidden; margin-top: 8px; }
+  .split span { display: block; border-radius: 4px; }
+  .today-num { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+
+  .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .act { background: var(--card); border: 0; border-radius: var(--r-md); padding: 12px 4px 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--ink); cursor: pointer; }
+  .act svg { color: var(--heat); }
+  .act.sending { background: var(--night-soft); }
+  .act.sending span { color: var(--night); }
+
+  .nav { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--card); padding: 8px 6px 12px; border-top: 1px solid var(--line); }
+  .nav div { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11.5px; color: var(--ink-2); }
+  .nav .on { color: var(--ink); font-weight: 600; }
+  .nav .on .pill { background: var(--night-soft); color: var(--night); }
+  .pill { width: 56px; height: 30px; border-radius: 15px; display: grid; place-items: center; }
+
+  /* Potrošnja */
+  .seg { display: grid; grid-template-columns: repeat(4,1fr); background: var(--card); border-radius: 999px; padding: 4px; }
+  .seg button { border: 0; background: transparent; font: inherit; font-size: 13px; padding: 7px 0; border-radius: 999px; color: var(--ink-2); cursor: pointer; }
+  .seg button.on { background: var(--ink); color: var(--enamel); font-weight: 600; }
+  .period { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; padding: 0 4px; }
+  .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi { background: var(--card); border-radius: var(--r-md); padding: 12px 14px; }
+  .kpi .v { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+  .kpi .l { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+  .kpi.warn .v { color: var(--day); }
+  .chart-title { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
+  .chart-legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-2); margin: 4px 0 6px; }
+  svg text { font-family: "Onest", system-ui, sans-serif; }
+  .insight { display: flex; gap: 12px; }
+  .insight .ico { flex: none; width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--night-soft); color: var(--night); }
+  .insight p { margin: 0; font-size: 14px; line-height: 1.42; }
+  .insight .btn { margin-top: 10px; background: var(--ink); color: var(--enamel); }
+
+  /* Dnevnik */
+  .filters { display: flex; gap: 8px; overflow: hidden; }
+  .fchip { flex: none; font-size: 12.5px; padding: 6px 12px; border-radius: 999px; background: var(--card); color: var(--ink-2); }
+  .fchip.on { background: var(--ink); color: var(--enamel); font-weight: 600; }
+  .dayhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 4px 4px 0; }
+  .dayhead > span { white-space: nowrap; flex: none; }
+  .dayhead b { font-size: 15px; }
+  .mini { display: flex; height: 6px; gap: 2px; width: 56px; border-radius: 4px; overflow: hidden; }
+  .tl { position: relative; padding-left: 18px; }
+  .tl::before { content: ""; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+  .ev { position: relative; background: var(--card); border-radius: var(--r-sm); padding: 10px 12px; margin-bottom: 8px; }
+  .ev::before { content: ""; position: absolute; left: -17px; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--ink-3)); box-shadow: 0 0 0 3px var(--enamel); }
+  .ev .t { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 500; }
+  .ev .t time { color: var(--ink-3); font-weight: 400; font-size: 13px; }
+  .ev .who { font-size: 12px; color: var(--c, var(--ink-2)); font-weight: 600; margin-top: 2px; }
+  .ev .d { font-size: 13px; color: var(--ink-2); margin-top: 3px; line-height: 1.4; }
+  .ev.open .diff { display: grid; grid-template-columns: auto 1fr 1fr; gap: 2px 12px; font-size: 12.5px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .diff .h { color: var(--ink-3); }
+
+  /* Raspored */
+  .presets { display: flex; gap: 8px; overflow: hidden; }
+  .preset { flex: none; background: var(--card); border-radius: var(--r-md); padding: 10px 12px; min-width: 104px; }
+  .preset .n { font-size: 13.5px; font-weight: 600; display: flex; gap: 6px; align-items: center; }
+  .preset .m { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+  .pdot { width: 9px; height: 9px; border-radius: 3px; }
+  .week { display: flex; flex-direction: column; gap: 9px; }
+  .wrow { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; }
+  .wrow .dn { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .wrow.today .dn { color: var(--ink); }
+  .wr { position: relative; height: 26px; border-radius: 8px; background: var(--day-soft); overflow: hidden; }
+  .wr .n { position: absolute; left: 0; top: 0; bottom: 0; width: 33.333%; background: var(--night-soft); }
+  .wr .w { position: absolute; top: 4px; bottom: 4px; border-radius: 5px; font-size: 11px; color: #fff; display: flex; align-items: center; padding-left: 7px; font-weight: 600; white-space: nowrap; }
+  .sched { display: flex; gap: 12px; align-items: center; }
+  .sched .ico { width: 34px; height: 34px; border-radius: 11px; background: var(--day-soft); color: var(--day); display: grid; place-items: center; flex: none; }
+  .note { max-width: 68ch; margin: 0 auto 60px; padding: 0 20px; font-size: 0.92rem; color: #3D4755; line-height: 1.55; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>DobarBoiler: kako bi aplikacija mogla da izgleda</h1>
+  <p>Maketa za dogovor, ne gotov dizajn. Jedan vizuelni jezik prolazi kroz sve ekrane: dan je traka od 24 sata, noć je jeftina struja, dan je skupa.</p>
+  <div class="legend-row">
+    <span><i class="sw" style="background:#4152B8"></i>jeftina tarifa, 00–08 h</span>
+    <span><i class="sw" style="background:#C27C0E"></i>skupa tarifa</span>
+    <span><i class="sw" style="background:#D75A28"></i>grejač radi</span>
+    <span><i class="sw" style="background:#A3326A"></i>promena spolja</span>
+  </div>
+</div>
+
+<div class="wall">
+
+<!-- ============ 1. POČETNA ============ -->
+<figure>
+<div class="phone">
+  <div class="status"><span>02:12</span><span>Uciteljsko</span></div>
+  <div class="screen">
+    <div class="topbar">
+      <h2>Bojler</h2>
+      <div class="icon-btn" aria-label="Podešavanja">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </div>
+    </div>
+
+    <div class="gauge" role="img" aria-label="Voda 52 stepena, cilj 55, greje">
+      <svg width="260" height="215" viewBox="0 0 260 215">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stop-color="#6E9BC4"/><stop offset=".55" stop-color="#E39A4C"/><stop offset="1" stop-color="#D75A28"/>
+          </linearGradient>
+        </defs>
+        <!-- luk 270°, 40–75 °C -->
+        <path d="M 55.8 199.2 A 105 105 0 1 1 204.2 199.2" fill="none" stroke="#E1E6EB" stroke-width="16" stroke-linecap="round"/>
+        <path d="M 55.8 199.2 A 105 105 0 0 1 59.2 47.5" fill="none" stroke="url(#g1)" stroke-width="16" stroke-linecap="round"/>
+        <!-- oznaka cilja 55 °C -->
+        <circle cx="95.3" cy="25.9" r="9" fill="#FFFFFF" stroke="#1B2430" stroke-width="2.5"/>
+      </svg>
+      <div class="center">
+        <div>
+          <div class="temp">52<sup>°C</sup></div>
+          <div class="state"><i class="dot"></i>Greje do 55°</div>
+        </div>
+      </div>
+      <div class="sub">gotovo za oko 15 min, 1 tuš spreman</div>
+    </div>
+
+    <div class="card">
+      <div class="ribbon-cap"><span>Danas</span><span>sledeće: isključenje u 07:30</span></div>
+      <div class="ribbon" title="Jeftina tarifa 00–08, prozor grejanja 00:30–07:30, sad 02:12">
+        <div class="night" style="width:33.333%"></div>
+        <div class="dayp" style="width:66.667%"></div>
+        <div class="win" style="left:2.08%; width:29.17%"></div>
+        <div class="actual" style="left:2.08%; width:7.1%"></div>
+        <div class="now" style="left:9.17%"></div>
+      </div>
+      <div class="hours"><span>0</span><span>4</span><span>8</span><span>12</span><span>16</span><span>20</span><span>24</span></div>
+    </div>
+
+    <div class="card reason">
+      <div class="chip"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+      <div>
+        <p><b>Vikend</b> po rasporedu</p>
+        <p class="muted small">Greje do 55° između 00:30 i 07:30, posle toga isključen.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="muted small grow">Potrošeno danas</span><span class="muted small">8 din</span></div>
+      <div class="today-num">2,25 kWh</div>
+      <div class="split" title="2,25 kWh jeftino, 0 kWh skupo"><span style="flex:1; background:var(--night)"></span></div>
+      <div class="muted small" style="margin-top:6px">Sve u jeftinoj tarifi</div>
+    </div>
+
+    <div class="actions">
+      <button class="act"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><span>Boost</span></button>
+      <button class="act"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg><span>Topla do…</span></button>
+      <button class="act"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20M5 20l7-14 7 14M9 14h6"/></svg><span>Odmor</span></button>
+      <button class="act"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/></svg><span>Ugasi</span></button>
+    </div>
+  </div>
+  <nav class="nav">
+    <div class="on"><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 3l9 8v10H3z"/></svg></span>Početna</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>Raspored</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>Potrošnja</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Dnevnik</div>
+  </nav>
+</div>
+<figcaption><b>Početna.</b> Broj, razlog i sledeći korak se vide bez skrolovanja. Traka dana pokazuje jeftinu noć, planirani prozor (isprekidano) i stvarno grejanje (narandžasta linija na dnu). Podešavanja su iza zupčanika.</figcaption>
+</figure>
+
+<!-- ============ 2. POČETNA SA SPOLJNOM PROMENOM (TAMNA) ============ -->
+<figure>
+<div class="phone dark">
+  <div class="status"><span>14:09</span><span>Uciteljsko</span></div>
+  <div class="screen">
+    <div class="topbar">
+      <h2>Bojler</h2>
+      <div class="icon-btn" aria-label="Podešavanja"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8.5" stroke-dasharray="3 2.6"/></svg></div>
+    </div>
+
+    <div class="gauge" role="img" aria-label="Voda 58 stepeni, cilj 65, greje">
+      <svg width="260" height="215" viewBox="0 0 260 215">
+        <defs>
+          <linearGradient id="g2" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stop-color="#6E9BC4"/><stop offset=".55" stop-color="#E39A4C"/><stop offset="1" stop-color="#F07A45"/>
+          </linearGradient>
+        </defs>
+        <path d="M 55.8 199.2 A 105 105 0 1 1 204.2 199.2" fill="none" stroke="#2C343D" stroke-width="16" stroke-linecap="round"/>
+        <path d="M 55.8 199.2 A 105 105 0 0 1 137.1 20.2" fill="none" stroke="url(#g2)" stroke-width="16" stroke-linecap="round"/>
+        <circle cx="218.9" cy="69.2" r="9" fill="#1F252C" stroke="#E07BAA" stroke-width="2.5"/>
+      </svg>
+      <div class="center">
+        <div>
+          <div class="temp">58<sup>°C</sup></div>
+          <div class="state"><i class="dot"></i>Greje do 65°</div>
+        </div>
+      </div>
+      <div class="sub">u skupoj tarifi od 14:02</div>
+    </div>
+
+    <div class="alert" role="alert">
+      <div class="title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Promena koja nije iz aplikacije</div>
+      <p>U 14:02 neko je uključio bojler i podigao temperaturu na 65°. To je zvanična Ariston aplikacija ili dugme na bojleru.</p>
+      <div class="btns"><button class="btn solid">Vrati na plan</button><button class="btn ghost">Zadrži do 00:30</button></div>
+    </div>
+
+    <div class="card">
+      <div class="ribbon-cap"><span>Danas</span><span>po planu: isključen do 00:30</span></div>
+      <div class="ribbon">
+        <div class="night" style="width:33.333%"></div>
+        <div class="dayp" style="width:66.667%"></div>
+        <div class="win" style="left:2.08%; width:29.17%"></div>
+        <div class="actual" style="left:2.08%; width:14%"></div>
+        <div class="actual" style="left:58.47%; width:0.5%; background:var(--outside)"></div>
+        <div class="now" style="left:58.96%"></div>
+      </div>
+      <div class="hours"><span>0</span><span>4</span><span>8</span><span>12</span><span>16</span><span>20</span><span>24</span></div>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="muted small grow">Potrošeno danas</span><span class="muted small">12 din</span></div>
+      <div class="today-num">2,5 kWh</div>
+      <div class="split"><span style="flex:2.25; background:var(--night)"></span><span style="flex:.25; background:var(--day)"></span></div>
+      <div class="muted small" style="margin-top:6px">2,25 jeftino, 0,25 skupo i raste</div>
+    </div>
+
+    <div class="actions">
+      <button class="act"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><span>Boost</span></button>
+      <button class="act"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg><span>Topla do…</span></button>
+      <button class="act"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20M5 20l7-14 7 14M9 14h6"/></svg><span>Odmor</span></button>
+      <button class="act sending" aria-busy="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--night)" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg><span>Šaljem…</span></button>
+    </div>
+  </div>
+  <nav class="nav">
+    <div class="on"><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 3l9 8v10H3z"/></svg></span>Početna</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>Raspored</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>Potrošnja</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Dnevnik</div>
+  </nav>
+</div>
+<figcaption><b>Početna, kad nešto spolja pregazi plan</b> (tamna tema). Upozorenje kaže šta se desilo i nudi dve jasne odluke. Dugme koje čeka cloud pokazuje „Šaljem…“ dok bojler ne potvrdi.</figcaption>
+</figure>
+
+<!-- ============ 3. POTROŠNJA ============ -->
+<figure>
+<div class="phone">
+  <div class="status"><span>09:40</span><span>Uciteljsko</span></div>
+  <div class="screen">
+    <div class="topbar"><h2>Potrošnja</h2></div>
+    <div class="seg" role="tablist"><button class="on">Dan</button><button>Nedelja</button><button>Mesec</button><button>Godina</button></div>
+    <div class="period"><span aria-hidden="true">‹</span><span>Subota, 17. oktobar</span><span aria-hidden="true">›</span></div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="v">2,7 kWh</div><div class="l">ukupno, 21,4 din</div></div>
+      <div class="kpi warn"><div class="v">12 din</div><div class="l">preplaćeno jer je 1,1 kWh išlo u skupoj tarifi</div></div>
+    </div>
+
+    <div class="card">
+      <p class="chart-title">Potrošnja po dva sata</p>
+      <div class="chart-legend"><span><i class="sw" style="background:var(--night)"></i>jeftino 1,6 kWh</span><span><i class="sw" style="background:var(--day)"></i>skupo 1,1 kWh</span></div>
+      <!-- 12 bucket-a, max 1.0 kWh = 100px -->
+      <svg viewBox="0 0 300 140" width="100%" role="img" aria-label="Stubići po dva sata: 00–02 0,73; 02–04 0,90; 12–14 0,43; 14–16 0,65 kWh">
+        <g stroke="#E1E6EB" stroke-width="1">
+          <line x1="24" y1="110" x2="296" y2="110"/><line x1="24" y1="60" x2="296" y2="60" stroke-dasharray="2 4"/><line x1="24" y1="10" x2="296" y2="10" stroke-dasharray="2 4"/>
+        </g>
+        <g font-size="10" fill="#8A94A3">
+          <text x="0" y="113">0</text><text x="0" y="63">0,5</text><text x="0" y="13">1,0</text>
+          <text x="27" y="126">0</text><text x="117" y="126">8</text><text x="183" y="126">14</text><text x="262" y="126">22</text>
+        </g>
+        <!-- stub širina 18, korak 22.6, početak 26 -->
+        <rect x="26" y="37.5" width="18" height="72.5" rx="4" fill="#4152B8"><title>00–02 h: 0,725 kWh, jeftino</title></rect>
+        <rect x="48.6" y="20" width="18" height="90" rx="4" fill="#4152B8"><title>02–04 h: 0,9 kWh, jeftino</title></rect>
+        <rect x="161.6" y="67.5" width="18" height="42.5" rx="4" fill="#C27C0E"><title>12–14 h: 0,425 kWh, skupo</title></rect>
+        <rect x="184.2" y="45" width="18" height="65" rx="4" fill="#C27C0E"><title>14–16 h: 0,65 kWh, skupo</title></rect>
+        <text x="192" y="38" font-size="10" fill="#556070" text-anchor="middle">0,65</text>
+      </svg>
+    </div>
+
+    <div class="card">
+      <p class="chart-title">Temperatura vode</p>
+      <svg viewBox="0 0 300 120" width="100%" role="img" aria-label="Temperatura tokom dana sa periodima grejanja">
+        <rect x="24" y="8" width="90.7" height="92" fill="#E4E8FA"/>
+        <rect x="160" y="8" width="45" height="92" fill="#F8E3EE"/>
+        <g font-size="10" fill="#8A94A3"><text x="0" y="22">60</text><text x="0" y="62">50</text><text x="0" y="100">40</text>
+          <text x="27" y="114">0</text><text x="117" y="114">8</text><text x="183" y="114">14</text><text x="262" y="114">22</text></g>
+        <polyline fill="none" stroke="#1B2430" stroke-width="2" stroke-linejoin="round"
+          points="24,96 32,96 40,90 52,72 64,58 76,48 90,40 104,38 116,40 128,46 140,50 152,57 160,60 172,48 186,30 200,24 206,26 220,40 236,44 252,52 268,55 284,58 296,59"/>
+        <line x1="24" y1="38" x2="296" y2="38" stroke="#D75A28" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <text x="296" y="34" font-size="10" fill="#556070" text-anchor="end">cilj 55°</text>
+      </svg>
+      <div class="chart-legend"><span><i class="sw" style="background:var(--night-soft)"></i>jeftina noć</span><span><i class="sw" style="background:var(--outside-soft)"></i>grejanje van plana</span></div>
+    </div>
+
+    <div class="card insight">
+      <div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></div>
+      <div>
+        <p><b>Preseti su topliji nego što ti treba.</b> Sa 52° umesto 55° voda bi ostala iznad 40° u 96 % dana ove jeseni. To je oko 2 kWh mesečno manje.</p>
+        <button class="btn">Promeni preset na 52°</button>
+      </div>
+    </div>
+  </div>
+  <nav class="nav">
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 3l9 8v10H3z"/></svg></span>Početna</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>Raspored</div>
+    <div class="on"><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>Potrošnja</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Dnevnik</div>
+  </nav>
+</div>
+<figcaption><b>Potrošnja, dan.</b> Stubići po dva sata su pravi podaci iz Ariston cloud-a za subotu 17. oktobar. Kriva temperature i uvid ispod su ilustracija dok server ne skupi istoriju.</figcaption>
+</figure>
+
+<!-- ============ 4. POTROŠNJA, GODINA ============ -->
+<figure>
+<div class="phone">
+  <div class="status"><span>09:41</span><span>Uciteljsko</span></div>
+  <div class="screen">
+    <div class="topbar"><h2>Potrošnja</h2></div>
+    <div class="seg"><button>Dan</button><button>Nedelja</button><button>Mesec</button><button class="on">Godina</button></div>
+    <div class="period"><span aria-hidden="true">‹</span><span>Poslednjih 12 meseci</span><span aria-hidden="true" style="opacity:.3">›</span></div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="v">513 kWh</div><div class="l">okt 2025 – sep 2026</div></div>
+      <div class="kpi"><div class="v">2,4 : 0,6</div><div class="l">kWh dnevno, zima prema letu</div></div>
+    </div>
+
+    <div class="card">
+      <p class="chart-title">kWh po mesecu</p>
+      <div class="chart-legend"><span>Podela na jeftino i skupo počinje od oktobra 2026, kad server počne da beleži.</span></div>
+      <!-- 12 meseci, max 80 kWh = 100 px -->
+      <svg viewBox="0 0 300 150" width="100%" role="img" aria-label="Mesečna potrošnja od oktobra 2025 do septembra 2026">
+        <g stroke="#E1E6EB"><line x1="26" y1="120" x2="298" y2="120"/><line x1="26" y1="57.5" x2="298" y2="57.5" stroke-dasharray="2 4"/></g>
+        <g font-size="10" fill="#8A94A3"><text x="0" y="123">0</text><text x="0" y="61">50</text></g>
+        <g fill="#7E8AA0">
+          <rect x="30" y="50.5" width="17" height="69.5" rx="4"><title>oktobar 2025: 55,6 kWh</title></rect>
+          <rect x="52.5" y="60.7" width="17" height="59.3" rx="4"><title>novembar: 47,5 kWh</title></rect>
+          <rect x="75" y="44.3" width="17" height="75.7" rx="4"><title>decembar: 60,6 kWh</title></rect>
+          <rect x="97.5" y="29.8" width="17" height="90.2" rx="4" fill="#556070"><title>januar 2026: 72,2 kWh</title></rect>
+          <rect x="120" y="71.1" width="17" height="48.9" rx="4"><title>februar: 39,2 kWh</title></rect>
+          <rect x="142.5" y="104.7" width="17" height="15.3" rx="4"><title>mart: 12,3 kWh</title></rect>
+          <rect x="165" y="50.9" width="17" height="69.1" rx="4"><title>april: 55,3 kWh</title></rect>
+          <rect x="187.5" y="46.2" width="17" height="73.8" rx="4"><title>maj: 59,1 kWh</title></rect>
+          <rect x="210" y="76.5" width="17" height="43.5" rx="4"><title>jun: 34,8 kWh</title></rect>
+          <rect x="232.5" y="104.8" width="17" height="15.2" rx="4" fill="#556070"><title>jul: 12,1 kWh</title></rect>
+          <rect x="255" y="98.5" width="17" height="21.5" rx="4"><title>avgust: 17,2 kWh</title></rect>
+          <rect x="277.5" y="88.8" width="17" height="31.2" rx="4"><title>septembar: 25,0 kWh</title></rect>
+        </g>
+        <text x="106" y="24" font-size="10" fill="#556070" text-anchor="middle">72</text>
+        <text x="241" y="99" font-size="10" fill="#556070" text-anchor="middle">12</text>
+        <g font-size="10" fill="#8A94A3" text-anchor="middle">
+          <text x="38" y="135">o</text><text x="61" y="135">n</text><text x="83" y="135">d</text><text x="106" y="135">j</text><text x="128" y="135">f</text><text x="151" y="135">m</text><text x="173" y="135">a</text><text x="196" y="135">m</text><text x="218" y="135">j</text><text x="241" y="135">j</text><text x="263" y="135">a</text><text x="286" y="135">s</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="card insight">
+      <div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/></svg></div>
+      <div><p><b>Januar troši šest puta više od jula.</b> Hladnija voda iz cevi i duže tuširanje. Zimski preset može da greje duže noću, letnji kraće i na nižoj temperaturi.</p></div>
+    </div>
+    <div class="card insight">
+      <div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+      <div><p><b>Mart i jul su skoro prazni.</b> Ako si tada bio odsutan, odmor je radio kako treba.</p></div>
+    </div>
+  </div>
+  <nav class="nav">
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 3l9 8v10H3z"/></svg></span>Početna</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>Raspored</div>
+    <div class="on"><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>Potrošnja</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Dnevnik</div>
+  </nav>
+</div>
+<figcaption><b>Potrošnja, godina.</b> Mesečne vrednosti su pravi podaci iz cloud-a. Stara istorija nema podelu na tarife, pa je siva; od sada će svaki mesec imati i tu podelu.</figcaption>
+</figure>
+
+<!-- ============ 5. DNEVNIK ============ -->
+<figure>
+<div class="phone">
+  <div class="status"><span>16:20</span><span>Uciteljsko</span></div>
+  <div class="screen">
+    <div class="topbar"><h2>Dnevnik</h2></div>
+    <div class="filters"><span class="fchip on">Sve</span><span class="fchip">Aplikacija</span><span class="fchip">Spolja</span><span class="fchip">Bojler</span><span class="fchip">Greške</span></div>
+
+    <div class="dayhead"><b>Subota, 17. oktobar</b><span class="row small muted">2,7 kWh <span class="mini"><span style="flex:1.625;background:var(--night)"></span><span style="flex:1.075;background:var(--day)"></span></span></span></div>
+    <div class="tl">
+      <div class="ev" style="--c: var(--outside)">
+        <div class="t"><span>Grejanje u skupoj tarifi</span><time>12:00–16:00</time></div>
+        <div class="who">Bojler sam, eco uključen</div>
+        <div class="d">1,1 kWh, oko 12 din više nego noću. Aplikacija u tom periodu nije slala komande.</div>
+      </div>
+      <div class="ev open" style="--c: var(--ink-2)">
+        <div class="t"><span>Isključen po rasporedu</span><time>07:30</time></div>
+        <div class="who">Aplikacija, kraj prozora</div>
+        <div class="diff"><span class="h"></span><span class="h">pre</span><span class="h">posle</span>
+          <span class="h">napajanje</span><span>uključen</span><span>isključen</span>
+          <span class="h">voda</span><span>61°</span><span>61°</span></div>
+      </div>
+      <div class="ev" style="--c: var(--heat)">
+        <div class="t"><span>Grejanje završeno</span><time>04:10</time></div>
+        <div class="who">Bojler, termostat</div>
+        <div class="d">Dostigao 55° za 3 h 20 min, 1,6 kWh.</div>
+      </div>
+      <div class="ev" style="--c: var(--ink-2)">
+        <div class="t"><span>Uključen, 55°, eco</span><time>00:30</time></div>
+        <div class="who">Aplikacija, preset Vikend</div>
+      </div>
+    </div>
+
+    <div class="dayhead"><b>Petak, 16. oktobar</b><span class="row small muted">0,6 kWh <span class="mini"><span style="flex:.25;background:var(--night)"></span><span style="flex:.325;background:var(--day)"></span></span></span></div>
+    <div class="tl">
+      <div class="ev" style="--c: var(--outside)">
+        <div class="t"><span>Temperatura promenjena na 60°</span><time>10:14</time></div>
+        <div class="who">Spolja, zvanična app ili dugme</div>
+      </div>
+    </div>
+  </div>
+  <nav class="nav">
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 3l9 8v10H3z"/></svg></span>Početna</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>Raspored</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>Potrošnja</div>
+    <div class="on"><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Dnevnik</div>
+  </nav>
+</div>
+<figcaption><b>Dnevnik.</b> Jedna vremenska linija za sve: šta je aplikacija uradila, šta je došlo spolja i šta je bojler uradio sam. Tap otvara stanje pre i posle. KWh u subotu 12–16 h su pravi; atribucija je primer onoga što server treba da potvrdi.</figcaption>
+</figure>
+
+<!-- ============ 6. RASPORED ============ -->
+<figure>
+<div class="phone">
+  <div class="status"><span>16:25</span><span>Uciteljsko</span></div>
+  <div class="screen">
+    <div class="topbar"><h2>Raspored</h2></div>
+
+    <div class="card sched">
+      <div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg></div>
+      <div class="grow"><b style="font-size:14px">Topla do utorka u 07:00</b><div class="muted small">60°, kreće oko 03:40 u jeftinoj tarifi</div></div>
+    </div>
+
+    <div class="presets">
+      <div class="preset"><div class="n"><i class="pdot" style="background:#D75A28"></i>Radni dan</div><div class="m">55°, 00:30–07:30</div></div>
+      <div class="preset"><div class="n"><i class="pdot" style="background:#8F5BB8"></i>Vikend</div><div class="m">55°, 00:30–07:30</div></div>
+      <div class="preset"><div class="n"><i class="pdot" style="background:#3E8C7A"></i>Leto</div><div class="m">48°, 03:00–07:00</div></div>
+      <div class="preset" style="display:grid;place-items:center;min-width:52px;color:var(--ink-2);font-size:22px">+</div>
+    </div>
+
+    <div class="card">
+      <div class="ribbon-cap"><span>Nedelja</span><span>od ponoći do ponoći</span></div>
+      <div class="week">
+        <div class="wrow"><span class="dn">pon</span><div class="wr"><span class="n"></span><span class="w" style="left:2.08%;width:29.17%;background:#D75A28">Radni dan</span></div></div>
+        <div class="wrow"><span class="dn">uto</span><div class="wr"><span class="n"></span><span class="w" style="left:2.08%;width:29.17%;background:#D75A28">Radni dan</span></div></div>
+        <div class="wrow"><span class="dn">sre</span><div class="wr"><span class="n"></span><span class="w" style="left:2.08%;width:29.17%;background:#D75A28">Radni dan</span></div></div>
+        <div class="wrow"><span class="dn">čet</span><div class="wr"><span class="n"></span><span class="w" style="left:2.08%;width:29.17%;background:#D75A28">Radni dan</span></div></div>
+        <div class="wrow"><span class="dn">pet</span><div class="wr"><span class="n"></span><span class="w" style="left:2.08%;width:29.17%;background:#D75A28">Radni dan</span></div></div>
+        <div class="wrow today"><span class="dn">sub</span><div class="wr"><span class="n"></span><span class="w" style="left:2.08%;width:29.17%;background:#8F5BB8">Vikend</span></div></div>
+        <div class="wrow"><span class="dn">ned</span><div class="wr"><span class="n"></span><span class="w" style="left:2.08%;width:29.17%;background:#8F5BB8">Vikend</span></div></div>
+      </div>
+      <div class="muted small" style="margin-top:10px">Tap na dan menja preset za taj dan ili samo za jedan datum.</div>
+    </div>
+  </div>
+  <nav class="nav">
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 3l9 8v10H3z"/></svg></span>Početna</div>
+    <div class="on"><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>Raspored</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>Potrošnja</div>
+    <div><span class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Dnevnik</div>
+  </nav>
+</div>
+<figcaption><b>Raspored.</b> Planer, preseti i zakazani izuzeci na jednom ekranu. Svaki dan je ista traka kao na početnoj, pa se odmah vidi da li prozor upada u jeftinu noć.</figcaption>
+</figure>
+
+</div>
+
+<p class="note">Boje za jeftino i skupo su provereni par: razlikuju se i kod daltonizma, a svaki grafik ima i tekstualnu oznaku pored boje. Font na maketi je Onest; u aplikaciji može ostati sistemski Roboto sa tabularnim ciframa ili se ubaciti Onest.</p>
+</body>
+</html>

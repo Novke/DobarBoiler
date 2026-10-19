@@ -1,0 +1,35 @@
+[project]
+name = "boilerd"
+version = "0.1.0"
+description = "DobarBoiler history server: read-only Ariston poller, analytics, REST and MCP"
+requires-python = ">=3.12"
+# pinned to the versions the suite was verified with; mcp 2.x renamed FastMCP to MCPServer
+dependencies = [
+  "fastapi==0.149.0",
+  "starlette==1.9.0",
+  "uvicorn[standard]==0.54.0",
+  "httpx==0.28.1",
+  "psycopg[binary]==3.3.6",
+  "psycopg-pool==3.3.3",
+  "mcp==2.3.0",
+  "pydantic==2.14.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "respx>=0.21"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["boilerd*"]
+
+[tool.setuptools.package-data]
+boilerd = ["migrations/*.sql"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]

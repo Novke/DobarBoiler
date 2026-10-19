@@ -36,3 +36,7 @@ __pycache__/
 # --- OS ---
 Thumbs.db
 Desktop.ini
+.superpowers/
+
+# Python packaging artifacts
+*.egg-info/

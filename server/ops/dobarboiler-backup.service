@@ -1,0 +1,10 @@
+[Unit]
+Description=DobarBoiler istorija (pg_dump) u S3 preko restic-a
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/usr/local/bin/dobarboiler-backup
+Nice=10
