@@ -31,7 +31,8 @@ def test_detect_target_changed():
     cur = st("2026-10-18T14:02:00+02:00", heat_req=False, req_temp=65.0)
     evs = detect(prev, cur, [prev], TARIFF, TZ)
     assert kinds(evs) == ["target_changed"]
-    assert evs[0].detail == {"from": 55.0, "to": 65.0}
+    assert evs[0].detail["from"] == 55.0 and evs[0].detail["to"] == 65.0
+    assert evs[0].detail["prev_at"] == prev.at.isoformat()
 
 
 def test_detect_heating_outside_window_opens_expensive():
@@ -79,11 +80,15 @@ def test_mode_9_is_warning():
 
 
 def ev(kind="target_changed", at="2026-10-18T14:02:00+02:00", **detail):
+    detail = detail or ({"from": 55.0, "to": 65.0} if kind == "target_changed" else {})
     return EventDraft(datetime.fromisoformat(at), kind, detail)
 
 
-def act(at, outcome="SUCCESS", local_id=1):
-    return AppAction("inst", local_id, datetime.fromisoformat(at), "CONVERGE", "USER", "x", outcome, None)
+APPLIED_65 = '{"powerOn":true,"targetTemp":65,"eco":true}'
+
+
+def act(at, outcome="SUCCESS", local_id=1, kind="CONVERGE", state_json=APPLIED_65):
+    return AppAction("inst", local_id, datetime.fromisoformat(at), kind, "USER", "x", outcome, state_json)
 
 
 def test_attr_app_within_window():
@@ -121,10 +126,53 @@ async def test_reattribute_after_late_upload(db):
         n = await persist_events(conn, [e], lambda d: "external")
         assert n == 1
         await conn.execute(
-            "INSERT INTO app_action (install_id, local_id, at, kind, trig, detail, outcome) "
-            "VALUES ('inst', 7, %s, 'CONVERGE', 'USER', 'temp 65', 'SUCCESS')",
-            (datetime.fromisoformat("2026-10-18T14:01:00+02:00"),))
+            "INSERT INTO app_action (install_id, local_id, at, kind, trig, detail, outcome, state_json) "
+            "VALUES ('inst', 7, %s, 'CONVERGE', 'USER', 'temp 65', 'SUCCESS', %s)",
+            (datetime.fromisoformat("2026-10-18T14:01:00+02:00"), APPLIED_65))
         changed = await reattribute_recent(conn, datetime.fromisoformat("2026-10-18T13:00:00+02:00"))
         assert changed == 1
         row = await (await conn.execute("SELECT attribution FROM event")).fetchone()
         assert row[0] == "app"
+
+
+def test_manual_change_detected_does_not_count_as_app():
+    cur = st("2026-10-18T14:02:00+02:00")
+    seen = datetime.fromisoformat("2026-10-18T13:00:00+02:00")
+    note = act("2026-10-18T14:03:00+02:00", kind="MANUAL_CHANGE_DETECTED", state_json=None)
+    verify = act("2026-10-18T14:03:30+02:00", kind="VERIFY_POLL", state_json=None, local_id=2)
+    assert attribute(ev(), [note, verify], seen, None, cur) == "external"
+
+
+def test_app_action_must_match_new_value():
+    cur = st("2026-10-18T14:02:00+02:00")
+    seen = datetime.fromisoformat("2026-10-18T13:00:00+02:00")
+    other = act("2026-10-18T14:01:00+02:00", state_json='{"powerOn":true,"targetTemp":60,"eco":true}')
+    assert attribute(ev(), [other], seen, None, cur) == "external"
+    assert attribute(ev(), [act("2026-10-18T14:01:00+02:00")], seen, None, cur) == "app"
+    half = act("2026-10-18T14:01:00+02:00", outcome="RETRYING", kind="COMMAND_FAILED")
+    assert attribute(ev(), [half], seen, None, cur) == "app"
+    off = act("2026-10-18T07:30:00+02:00", state_json='{"powerOn":false}')
+    assert attribute(ev("power_off", "2026-10-18T07:31:00+02:00"), [off], seen, None, cur) == "app"
+    assert attribute(ev("power_on", "2026-10-18T07:31:00+02:00"), [off], seen, None, cur) == "external"
+
+
+def test_gap_window_uses_previous_sample():
+    prev = st("2026-10-17T23:00:00+02:00", on=False)
+    cur = st("2026-10-18T03:00:00+02:00", on=True)
+    evs = detect(prev, cur, [prev], TARIFF, TZ)
+    power = [e for e in evs if e.kind == "power_on"][0]
+    seen = datetime.fromisoformat("2026-10-18T00:30:00+02:00")
+    on_action = act("2026-10-18T00:30:00+02:00", state_json='{"powerOn":true,"targetTemp":55,"eco":true}')
+    assert attribute(power, [on_action], seen, None, cur) == "app"
+
+
+def test_stale_intent_ignored():
+    cur = st("2026-10-17T12:00:00+02:00", eco=True, heat_req=True)
+    old = AppIntent("inst", datetime.fromisoformat("2026-10-17T00:30:00+02:00"), "WEEKLY_PLAN",
+                    {"power_on": True, "target_temp": 55, "eco": True},
+                    datetime.fromisoformat("2026-10-17T07:30:00+02:00"))
+    e = ev("expensive_heating_started", "2026-10-17T12:00:00+02:00")
+    assert attribute(e, [], cur.at, old, cur) == "firmware_eco"
+    ancient = AppIntent("inst", datetime.fromisoformat("2026-10-15T12:00:00+02:00"), "KEEP_WARM",
+                        {"power_on": True, "target_temp": 40, "eco": True}, None)
+    assert attribute(e, [], cur.at, ancient, cur) == "firmware_eco"

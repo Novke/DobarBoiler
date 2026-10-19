@@ -1,8 +1,0 @@
-pyproject.toml
-boilerd/__init__.py
-boilerd.egg-info/PKG-INFO
-boilerd.egg-info/SOURCES.txt
-boilerd.egg-info/dependency_links.txt
-boilerd.egg-info/requires.txt
-boilerd.egg-info/top_level.txt
-tests/test_db.py

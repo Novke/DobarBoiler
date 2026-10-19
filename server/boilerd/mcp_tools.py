@@ -35,9 +35,10 @@ A 2 h bucket is cheap when it lies inside 00–08 h local time; cost = cheap kWh
 """
 
 
-def _dt(s: str) -> datetime:
+def _dt(s: str, tz: ZoneInfo) -> datetime:
+    """ISO time; without an offset it is Europe/Belgrade local time (what a person means by "14:02")."""
     d = datetime.fromisoformat(s)
-    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    return d if d.tzinfo else d.replace(tzinfo=tz)
 
 
 def _fmt(x) -> str:
@@ -82,7 +83,7 @@ def build_mcp(pool, ro_dsn: str, tz: ZoneInfo, poller=None) -> MCPServer:
     async def boiler_state_series(from_: str, to: str, step: str = "5m") -> dict[str, Any]:
         """Temperature, target and heating over time, averaged per step (30s, 5m, 1h, 1d). Times are ISO 8601."""
         async with pool.connection() as conn:
-            rows = await analytics.state_series(conn, _dt(from_), _dt(to), parse_step(step))
+            rows = await analytics.state_series(conn, _dt(from_, tz), _dt(to, tz), parse_step(step))
         temps = [r["temp"] for r in rows]
         summary = (f"{len(rows)} tačaka, temperatura od {min(temps)} do {max(temps)} °C." if rows else "Nema uzoraka.")
         return {"rows": rows, "summary": summary}
@@ -93,7 +94,7 @@ def build_mcp(pool, ro_dsn: str, tz: ZoneInfo, poller=None) -> MCPServer:
         if granularity not in ("2h", "day", "month"):
             raise ValueError("granularity: 2h, day ili month")
         async with pool.connection() as conn:
-            rows = [r.as_dict() for r in await analytics.energy(conn, _dt(from_), _dt(to), granularity, tz)]
+            rows = [r.as_dict() for r in await analytics.energy(conn, _dt(from_, tz), _dt(to, tz), granularity, tz)]
         total = sum(r["kwh"] for r in rows)
         known = [r for r in rows if r["cheap_kwh"] is not None]
         summary = f"Ukupno {_fmt(total)} kWh u {len(rows)} perioda."
@@ -108,7 +109,7 @@ def build_mcp(pool, ro_dsn: str, tz: ZoneInfo, poller=None) -> MCPServer:
                             attribution: str | None = None) -> dict[str, Any]:
         """Events with attribution (app, external, firmware, firmware_eco, unknown), optionally filtered."""
         sql = "SELECT id, at, kind, attribution, severity, detail FROM event WHERE at >= %s AND at < %s"
-        args: list = [_dt(from_), _dt(to)]
+        args: list = [_dt(from_, tz), _dt(to, tz)]
         if kinds:
             sql += " AND kind = ANY(%s)"
             args.append(kinds)
@@ -144,7 +145,7 @@ def build_mcp(pool, ro_dsn: str, tz: ZoneInfo, poller=None) -> MCPServer:
     @mcp.tool(structured_output=True)
     async def boiler_explain(at: str) -> dict[str, Any]:
         """What happened around a moment: state before/after, app actions and events within ±30 min."""
-        t = _dt(at)
+        t = _dt(at, tz)
         lo, hi = t - timedelta(minutes=30), t + timedelta(minutes=30)
         async with pool.connection() as conn:
             before = await latest_state(conn, before=t + timedelta(seconds=1))
@@ -168,7 +169,8 @@ def build_mcp(pool, ro_dsn: str, tz: ZoneInfo, poller=None) -> MCPServer:
             who = {"app": "aplikacija", "external": "nešto spolja (zvanična app ili dugme)",
                    "firmware": "termostat bojlera", "firmware_eco": "bojler sam, eco režim",
                    "unknown": "nepoznato (telefon nije slao zapise)"}
-            lines = [f"{e['at'][11:16]} {e['kind']}: {who.get(e['attribution'], 'bez uzroka')}" for e in evs]
+            lines = [f"{datetime.fromisoformat(e['at']).astimezone(tz):%H:%M} {e['kind']}: "
+                     f"{who.get(e['attribution'], 'bez uzroka')}" for e in evs]
             summary = "Oko tog trenutka: " + "; ".join(lines) + "."
         else:
             summary = "U ±30 min nema zabeleženih događaja."
@@ -197,7 +199,8 @@ def build_mcp(pool, ro_dsn: str, tz: ZoneInfo, poller=None) -> MCPServer:
             await conn.execute("SET statement_timeout = '5s'")
             await conn.commit()
             async with conn.transaction(force_rollback=True):
-                cur = await conn.execute(q)
+                # the LIMIT runs on the server, so a huge result never reaches this process
+                cur = await conn.execute(f"SELECT * FROM ({q}) AS _agent_query LIMIT {MAX_ROWS + 1}")
                 cols = [c.name for c in cur.description or []]
                 rows = await cur.fetchmany(MAX_ROWS + 1)
         truncated = len(rows) > MAX_ROWS

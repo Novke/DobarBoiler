@@ -6,6 +6,7 @@ the boiler firmware itself (thermostat, or eco/ECO EVO), or unknown (phone silen
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Callable
@@ -25,6 +26,9 @@ PHONE_SILENT = timedelta(hours=6)
 DRAW_WINDOW = timedelta(minutes=6)
 DRAW_COOLDOWN = timedelta(minutes=10)
 DRAW_MIN_DROP = 2.0
+INTENT_MAX_AGE = timedelta(hours=24)
+# action_log rows that are notes, not commands sent to the boiler
+NON_COMMAND_KINDS = {"MANUAL_CHANGE_DETECTED", "VERIFY_POLL"}
 
 
 @dataclass(frozen=True)
@@ -67,14 +71,15 @@ def detect(prev: StateSample | None, cur: StateSample, recent: list[StateSample]
         return []
     out: list[EventDraft] = []
     at = cur.at
+    since = {"prev_at": prev.at.isoformat()}  # the change happened somewhere in (prev.at, cur.at]
     if prev.on != cur.on:
-        out.append(EventDraft(at, "power_on" if cur.on else "power_off"))
+        out.append(EventDraft(at, "power_on" if cur.on else "power_off", dict(since)))
     if abs(prev.req_temp - cur.req_temp) >= 0.5:
-        out.append(EventDraft(at, "target_changed", {"from": prev.req_temp, "to": cur.req_temp}))
+        out.append(EventDraft(at, "target_changed", {"from": prev.req_temp, "to": cur.req_temp, **since}))
     if prev.eco != cur.eco:
-        out.append(EventDraft(at, "eco_changed", {"from": prev.eco, "to": cur.eco}))
+        out.append(EventDraft(at, "eco_changed", {"from": prev.eco, "to": cur.eco, **since}))
     if prev.mode != cur.mode:
-        out.append(EventDraft(at, "mode_changed", {"from": prev.mode, "to": cur.mode},
+        out.append(EventDraft(at, "mode_changed", {"from": prev.mode, "to": cur.mode, **since},
                               "warning" if cur.mode != 1 else "info"))
     cheap_now = _cheap_at(at, tariff, tz)
     if prev.heat_req != cur.heat_req:
@@ -97,19 +102,61 @@ def detect(prev: StateSample | None, cur: StateSample, recent: list[StateSample]
     return out
 
 
+def _window_start(ev: EventDraft) -> datetime:
+    prev_at = ev.detail.get("prev_at")
+    start = datetime.fromisoformat(prev_at) if isinstance(prev_at, str) else ev.at
+    return min(start, ev.at) - ACTION_BEFORE
+
+
+def _applied(a: AppAction) -> dict | None:
+    """The state the app asserted with this action, if it sent commands at all."""
+    if a.kind in NON_COMMAND_KINDS or a.state_json is None:
+        return None
+    if not (a.outcome == "SUCCESS" or a.kind == "COMMAND_FAILED"):  # a failed batch may be half-applied
+        return None
+    try:
+        applied = json.loads(a.state_json)
+    except ValueError:
+        return None
+    return applied if isinstance(applied, dict) and "powerOn" in applied else None
+
+
+def _matches(ev: EventDraft, applied: dict) -> bool:
+    if ev.kind == "power_on":
+        return applied.get("powerOn") is True
+    if ev.kind == "power_off":
+        return applied.get("powerOn") is False
+    if ev.kind == "target_changed":
+        t = applied.get("targetTemp")
+        return t is not None and abs(float(t) - float(ev.detail.get("to", -999))) <= 0.5
+    if ev.kind == "eco_changed":
+        return applied.get("eco") is not None and applied.get("eco") == ev.detail.get("to")
+    if ev.kind == "mode_changed":  # the app only ever normalizes to mode 1
+        return ev.detail.get("to") == 1 and applied.get("powerOn") is True
+    return False
+
+
+def _intent_current(intent: AppIntent | None, at: datetime) -> bool:
+    if intent is None or at - intent.at > INTENT_MAX_AGE:
+        return False
+    return intent.next_transition_at is None or at <= intent.next_transition_at + ACTION_AFTER
+
+
 def attribute(ev: EventDraft, actions: list[AppAction], last_action_seen_at: datetime | None,
               intent: AppIntent | None, cur: StateSample) -> str | None:
     if ev.kind in CHANGE_KINDS:
-        lo, hi = ev.at - ACTION_BEFORE, ev.at + ACTION_AFTER
-        if any(a.outcome == "SUCCESS" and lo <= a.at <= hi for a in actions):
-            return "app"
+        lo, hi = _window_start(ev), ev.at + ACTION_AFTER
+        for a in actions:
+            applied = _applied(a)
+            if applied is not None and lo <= a.at <= hi and _matches(ev, applied):
+                return "app"
         if last_action_seen_at is None or ev.at - last_action_seen_at > PHONE_SILENT:
             return "unknown"
         return "external"
     if ev.kind in HEATING_KINDS:
         if ev.kind == "heating_started" and ev.detail.get("cheap", False):
             return None
-        if intent is not None and intent.desired.get("power_on"):
+        if _intent_current(intent, ev.at) and intent.desired.get("power_on"):
             return "app"
         return "firmware_eco" if cur.eco else "firmware"
     return None
@@ -124,11 +171,13 @@ async def persist_events(conn: AsyncConnection, drafts: list[EventDraft],
     return len(drafts)
 
 
-async def actions_around(conn: AsyncConnection, at: datetime) -> tuple[list[AppAction], datetime | None]:
-    """Actions near `at` and the latest action the phone logged up to `at` + 5 min."""
+async def actions_around(conn: AsyncConnection, at: datetime,
+                         since: datetime | None = None) -> tuple[list[AppAction], datetime | None]:
+    """Actions in [since or at, at + 5 min] (minus 3 min) and the latest action logged up to `at` + 5 min."""
+    lo = min(since or at, at) - ACTION_BEFORE
     cur = await conn.execute(
         "SELECT install_id, local_id, at, kind, trig, detail, outcome, state_json FROM app_action "
-        "WHERE at BETWEEN %s AND %s ORDER BY at", (at - ACTION_BEFORE, at + ACTION_AFTER))
+        "WHERE at BETWEEN %s AND %s ORDER BY at", (lo, at + ACTION_AFTER))
     actions = [AppAction(*r) for r in await cur.fetchall()]
     row = await (await conn.execute("SELECT max(at) FROM app_action WHERE at <= %s",
                                     (at + ACTION_AFTER,))).fetchone()
@@ -153,8 +202,9 @@ async def reattribute_recent(conn: AsyncConnection, since: datetime) -> int:
         "AND attribution IN ('unknown', 'external')", (since - ACTION_AFTER, list(CHANGE_KINDS)))
     changed = 0
     for ev_id, at, kind, detail, severity in await cur.fetchall():
-        actions, last_seen = await actions_around(conn, at)
-        new = attribute(EventDraft(at, kind, detail, severity), actions, last_seen, None, None)  # type: ignore[arg-type]
+        draft = EventDraft(at, kind, detail, severity)
+        actions, last_seen = await actions_around(conn, at, _window_start(draft) + ACTION_BEFORE)
+        new = attribute(draft, actions, last_seen, None, None)  # type: ignore[arg-type]
         res = await conn.execute("UPDATE event SET attribution = %s WHERE id = %s AND attribution IS DISTINCT FROM %s",
                                  (new, ev_id, new))
         changed += res.rowcount

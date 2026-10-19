@@ -1,11 +1,12 @@
 """Tariff split, reports and insights over the history tables (design §4.5)."""
 from __future__ import annotations
 
+import bisect
 import statistics
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Literal
+from typing import Literal, NamedTuple
 from zoneinfo import ZoneInfo
 
 from psycopg import AsyncConnection
@@ -365,7 +366,32 @@ def _in_season(d: date, season: str | None) -> bool:
     return season is None or d.month in SEASONS[season]
 
 
-def _segments(samples: list[StateSample], pred) -> list[list[StateSample]]:
+class _S(NamedTuple):
+    at: datetime
+    on: bool
+    temp: float
+    req_temp: float
+    eco: bool
+    heat_req: bool
+    local: datetime
+
+
+INSIGHT_DAYS = 365
+
+
+async def _light_samples(conn: AsyncConnection, season: str | None, tz: ZoneInfo) -> list[_S]:
+    """Only the columns insights need, last year only, season filtered in SQL (no raw JSON)."""
+    sql = ('SELECT at, "on", temp, req_temp, eco, heat_req FROM state_sample '
+           "WHERE at > now() - make_interval(days => %s)")
+    args: list = [INSIGHT_DAYS]
+    if season is not None:
+        sql += " AND extract(month FROM at AT TIME ZONE %s)::int = ANY(%s)"
+        args += [str(tz), sorted(SEASONS[season])]
+    cur = await conn.execute(sql + " ORDER BY at", args)
+    return [_S(*r, r[0].astimezone(tz)) for r in await cur.fetchall()]
+
+
+def _segments(samples: list, pred) -> list[list]:
     segs, cur = [], []
     for s in samples:
         if pred(s):
@@ -389,15 +415,18 @@ async def insights(conn: AsyncConnection, season: str | None, tz: ZoneInfo) -> d
             ndays = (_next_month(m) - m).days
             by_month.append({"month": m.strftime("%Y-%m"), "kwh": float(kwh), "kwh_per_day": round(float(kwh) / ndays, 2)})
 
-    samples = [s for s in await recent_states(conn, datetime(2000, 1, 1, tzinfo=tz))
-               if _in_season(s.at.astimezone(tz).date(), season)]
-    draws = await (await conn.execute("SELECT at, detail FROM event WHERE kind = 'water_draw' ORDER BY at")).fetchall()
+    samples = await _light_samples(conn, season, tz)
+    draws = await (await conn.execute(
+        "SELECT at, detail FROM event WHERE kind = 'water_draw' AND at > now() - make_interval(days => %s) "
+        "ORDER BY at", (INSIGHT_DAYS,))).fetchall()
     draw_times = [a for a, _ in draws]
 
     rest_rates = []
     for seg in _segments(samples, lambda s: s.on and not s.heat_req):
         hours = (seg[-1].at - seg[0].at).total_seconds() / 3600
-        if hours >= 2 and not any(seg[0].at <= d <= seg[-1].at for d in draw_times):
+        i = bisect.bisect_left(draw_times, seg[0].at)
+        has_draw = i < len(draw_times) and draw_times[i] <= seg[-1].at
+        if hours >= 2 and not has_draw:
             rest_rates.append((seg[0].temp - seg[-1].temp) / hours)
     standby = standby_loss_w(statistics.median(rest_rates)) if rest_rates else None
 
@@ -410,14 +439,18 @@ async def insights(conn: AsyncConnection, season: str | None, tz: ZoneInfo) -> d
 
     kwh_per_c_vals = []
     if samples:
+        times = [s.at for s in samples]
         for b_start, b_end, kwh in await _buckets(conn, samples[0].at, samples[-1].at):
-            inside = [s for s in samples if b_start <= s.at < b_end]
+            if kwh < Decimal("0.2"):
+                continue
+            lo, hi = bisect.bisect_left(times, b_start), bisect.bisect_left(times, b_end)
+            inside = samples[lo:hi]
             rise = sum(max(0.0, n.temp - s.temp) for s, n in zip(inside, inside[1:]) if s.heat_req)
-            if kwh >= Decimal("0.2") and rise >= 2:
+            if rise >= 2:
                 kwh_per_c_vals.append(float(kwh) / rise)
     kwh_per_c = round(statistics.median(kwh_per_c_vals), 3) if kwh_per_c_vals else None
 
-    days_with_samples = {s.at.astimezone(tz).date() for s in samples}
+    days_with_samples = {s.local.date() for s in samples}
     hot_water = None
     if days_with_samples:
         litres = sum(VOLUME_L * float(det.get("drop", 0)) / (40 - COLD_WATER_C) for a, det in draws
@@ -425,12 +458,12 @@ async def insights(conn: AsyncConnection, season: str | None, tz: ZoneInfo) -> d
         hot_water = round(litres / len(days_with_samples), 1)
 
     minima = []
-    by_day: dict[date, list[StateSample]] = {}
+    by_day: dict[date, list[_S]] = {}
     for s in samples:
-        by_day.setdefault(s.at.astimezone(tz).date(), []).append(s)
+        by_day.setdefault(s.local.date(), []).append(s)
     for d, ss in by_day.items():
-        window = [s for s in ss if s.at.astimezone(tz).time() < time(8) and s.on]
-        rest = [s for s in ss if s.at.astimezone(tz).time() >= time(8)]
+        window = [s for s in ss if s.local.time() < time(8) and s.on]
+        rest = [s for s in ss if s.local.time() >= time(8)]
         if window and len(rest) >= 200:
             minima.append((min(s.temp for s in rest), max(s.req_temp for s in window)))
     rec = recommend_target(minima)

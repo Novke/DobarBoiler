@@ -8,7 +8,7 @@ from typing import Awaitable, Callable
 
 from psycopg_pool import AsyncConnectionPool
 
-from .ariston import AristonError, RateLimited
+from .ariston import AristonError, AuthFailed, RateLimited
 from .config import Settings
 from .events import EventDraft, actions_around, attribute, detect, latest_intent, persist_events
 from .ingest import (
@@ -20,6 +20,7 @@ log = logging.getLogger("boilerd.poller")
 
 JOB_ORDER = ["plants", "state", "energy", "backfill", "crosscheck", "settings", "errors"]
 OFFLINE_AFTER = 3
+PLANTS_RETRY = timedelta(minutes=10)
 DAILY_AT = (2, 10)
 POLL_LOG_DAYS = 30
 
@@ -94,10 +95,17 @@ class Poller:
             except RateLimited:
                 log.warning("rate limited, skipping the rest of this cycle")
                 break
+            except AuthFailed as e:
+                log.error("Ariston login rejected (%s); calls paused, skipping the rest of this cycle", e)
+                break
             except AristonError as e:
                 log.warning("job %s failed: %s", job, e)
             except Exception:  # never let one job kill the loop
                 log.exception("job %s crashed", job)
+            finally:
+                if job == "plants" and self.gw is None:
+                    # retry discovery soon instead of in 24 h: nothing else can run without the gateway id
+                    self.last_run[job] = t - timedelta(hours=24) + PLANTS_RETRY
         return ran
 
     async def run_forever(self, granularity_s: float = 15) -> None:
@@ -161,11 +169,11 @@ class Poller:
             recent = await recent_states(conn, t - timedelta(minutes=10))
             recent = [s for s in recent if s.at < t]
             row = await (await conn.execute("SELECT max(at) FROM event WHERE kind = 'water_draw'")).fetchone()
-            tariff = await tariff_at(conn, t)
+            tariff = await tariff_at(conn, t, self.tz)
             drafts = detect(prev, cur, recent, tariff, self.tz, last_draw_at=row[0])
             if not drafts:
                 return
-            actions, last_seen = await actions_around(conn, t)
+            actions, last_seen = await actions_around(conn, t, prev.at if prev else None)
             intent = await latest_intent(conn, t)
             await persist_events(conn, drafts, lambda d: attribute(d, actions, last_seen, intent, cur))
 

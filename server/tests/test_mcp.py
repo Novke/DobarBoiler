@@ -107,3 +107,23 @@ async def test_rest_still_served_next_to_mcp(db):
     async with http(db) as c:
         r = await c.get("/api/v1/health")
     assert r.status_code == 200 and "ok" in r.json()
+
+
+async def test_boiler_sql_limits_on_server(db):
+    import time as _t
+    started = _t.monotonic()
+    async with Client(server(db)) as c:
+        res = await c.call_tool("boiler_sql", {"query": "SELECT generate_series(1, 300000000) AS n"})
+    assert not res.is_error, res
+    assert len(res.structured_content["rows"]) == 1000 and _t.monotonic() - started < 4
+
+
+async def test_naive_time_is_local(db):
+    async with db.connection() as conn:
+        await conn.execute("INSERT INTO event (at, kind, attribution) VALUES (%s, 'target_changed', 'external')",
+                           (datetime.fromisoformat("2026-10-17T12:10:00+02:00"),))
+    async with Client(server(db)) as c:
+        res = await c.call_tool("boiler_explain", {"at": "2026-10-17T12:15:00"})
+    data = res.structured_content
+    assert len(data["events"]) == 1
+    assert "12:10" in data["summary"]

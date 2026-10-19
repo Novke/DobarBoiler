@@ -150,3 +150,65 @@ async def test_first_tick_reads_consumption_once(db, clock):
     p = Poller(c, db, settings(), clock)
     await p.tick()
     assert c.calls.count("consumption") == 1
+
+
+class FlakyPlants(FakeClient):
+    def __init__(self):
+        super().__init__()
+        self.plants_fail = 1
+
+    async def plants(self):
+        if self.plants_fail:
+            self.plants_fail -= 1
+            self._rec("plants", None, "ConnectError")
+            raise AristonError(None, "ConnectError")
+        return await super().plants()
+
+
+async def test_plants_failure_retries_after_10_min(db, clock):
+    c = FlakyPlants()
+    p = Poller(c, db, settings(), clock)
+    await p.tick()
+    assert p.gw is None
+    clock.t += timedelta(minutes=5)
+    await p.tick()
+    assert c.calls.count("plants") == 1
+    clock.t += timedelta(minutes=6)
+    await p.tick()
+    assert p.gw == GW and "state" in c.calls
+
+
+class LockedOut(FakeClient):
+    async def state(self, gw):
+        from boilerd.ariston import AuthFailed
+        self._rec("state", None, "auth")
+        raise AuthFailed("login returned 401")
+
+
+async def test_auth_failure_stops_tick(db, clock):
+    c = LockedOut()
+    p = Poller(c, db, settings(), clock)
+    ran = await p.tick()
+    assert "state" in ran and c.calls == ["plants", "state"]
+
+
+class PausedClient(FakeClient):
+    async def state(self, gw):
+        if self.rate_limited:
+            self.last_call = None
+            raise RateLimited(0)
+        return await super().state(gw)
+
+
+async def test_pause_does_not_duplicate_poll_log(db, clock):
+    c = PausedClient()
+    p = Poller(c, db, settings(), clock)
+    await p.tick()
+    async with db.connection() as conn:
+        before = (await (await conn.execute("SELECT count(*) FROM poll_log")).fetchone())[0]
+    c.rate_limited = True
+    clock.t += timedelta(seconds=120)
+    await p.tick()
+    async with db.connection() as conn:
+        after = (await (await conn.execute("SELECT count(*) FROM poll_log")).fetchone())[0]
+    assert after == before

@@ -102,3 +102,20 @@ async def test_insights_on_sparse_data(db):
     assert res["standby_loss_w"] is None
     assert res["kwh_per_c"] is None
     assert any(m["month"] == "2026-01" for m in res["kwh_per_day_by_month"])
+
+
+async def test_insights_scales_to_a_year_of_samples(db):
+    import time as _t
+    async with db.connection() as conn:
+        await conn.execute(
+            'INSERT INTO state_sample (at, "on", mode, temp, req_temp, eco, heat_req, anti_leg, raw) '
+            "SELECT ts, true, 1, 45 + (mod(extract(minute FROM ts)::int, 10)), 55, true, (extract(hour FROM ts)::int < 4), false, "
+            "'{\"pad\": \"" + "x" * 300 + "\"}' FROM generate_series(now() - interval '300 days', now(), interval '2 minutes') ts")
+        await conn.execute(
+            "INSERT INTO energy_2h (bucket_start, bucket_end, kwh, first_seen_at, last_seen_at) "
+            "SELECT ts, ts + interval '2 hours', 0.3, now(), now() FROM generate_series(now() - interval '300 days', now(), interval '2 hours') ts")
+        started = _t.monotonic()
+        res = await insights(conn, None, TZ)
+        elapsed = _t.monotonic() - started
+    assert elapsed < 8, elapsed
+    assert res["heating_rate_c_per_h"] is not None

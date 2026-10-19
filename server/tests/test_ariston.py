@@ -129,3 +129,44 @@ async def test_only_allowed_paths():
         ("GET", f"remote/reports/{GW}/consSequencesApi8"),
         ("GET", "busErrors"),
     }
+
+
+async def test_auth_failure_pauses_and_backs_off():
+    clock = Clock()
+
+    class BadLogin(Cloud):
+        async def handler(self, request):
+            if request.url.path.endswith("accounts/login"):
+                self.requests.append(request)
+                self.logins += 1
+                return httpx.Response(401, json={})
+            return await super().handler(request)
+
+    cloud = BadLogin()
+    c = make(cloud, clock)
+    with pytest.raises(AuthFailed):
+        await c.state(GW)
+    clock.t += 30 * 60
+    with pytest.raises(AuthFailed):
+        await c.state(GW)
+    assert cloud.logins == 1
+    clock.t += 31 * 60
+    with pytest.raises(AuthFailed):
+        await c.state(GW)
+    assert cloud.logins == 2
+    clock.t += 61 * 60          # second pause is 2 h
+    with pytest.raises(AuthFailed):
+        await c.state(GW)
+    assert cloud.logins == 2
+
+
+async def test_paused_call_clears_last_call():
+    clock = Clock()
+    cloud = Cloud({f"velis/medPlantData/{GW}": [429]})
+    c = make(cloud, clock)
+    with pytest.raises(RateLimited):
+        await c.state(GW)
+    assert c.last_call.status == 429
+    with pytest.raises(RateLimited):
+        await c.state(GW)
+    assert c.last_call is None

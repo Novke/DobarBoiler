@@ -18,6 +18,8 @@ HEADERS = {"User-Agent": "RestSharp/106.11.7.0", "Content-Type": "application/js
 APP_INFO = {"os": 2, "appVer": "5.6.772.40151", "appId": "com.remotethermo.aristonnet"}
 PAUSE_ON_429_S = 15 * 60
 RETRY_DELAY_S = 5
+AUTH_PAUSE_S = 60 * 60          # first pause after a rejected login; doubles on repeat
+AUTH_PAUSE_MAX_S = 24 * 60 * 60
 
 
 class AristonError(Exception):
@@ -63,6 +65,8 @@ class AristonClient:
         self._lock = asyncio.Lock()
         self._token: str | None = None
         self.paused_until: float = 0.0
+        self.auth_paused_until: float = 0.0
+        self._auth_pause_s: float = AUTH_PAUSE_S
         self.last_call: CallRecord | None = None
 
     async def aclose(self) -> None:
@@ -94,14 +98,24 @@ class AristonClient:
         if resp.status_code != 200:
             raise AuthFailed(f"login returned {resp.status_code}")
         self._token = resp.json()["token"]
+        self._auth_pause_s = AUTH_PAUSE_S
+
+    def _pause_auth(self) -> None:
+        """A rejected login must not be retried every cycle: that could lock the account the phone uses too."""
+        self._token = None
+        self.auth_paused_until = self._clock() + self._auth_pause_s
+        self._auth_pause_s = min(self._auth_pause_s * 2, AUTH_PAUSE_MAX_S)
 
     async def _send(self, path: str) -> httpx.Response:
         return await self._http.get(path, headers={"ar.authToken": self._token or ""})
 
     async def _get(self, endpoint: str, path: str) -> Any:
         async with self._lock:
+            self.last_call = None
             if self._clock() < self.paused_until:
                 raise RateLimited(self.paused_until)
+            if self._clock() < self.auth_paused_until:
+                raise AuthFailed("login paused after a rejected login")
             started = self._clock()
             status: int | None = None
             try:
@@ -114,7 +128,6 @@ class AristonClient:
                     resp = await self._send_with_retry(path)
                     status = resp.status_code
                     if status == 405:
-                        self._token = None
                         raise AuthFailed("token rejected after re-login")
                 if status == 429:
                     self.paused_until = self._clock() + PAUSE_ON_429_S
@@ -124,6 +137,10 @@ class AristonClient:
                 result = resp.json()
                 self._record(endpoint, status, started, None)
                 return result
+            except AuthFailed as e:
+                self._pause_auth()
+                self._record(endpoint, status, started, str(e))
+                raise
             except AristonError as e:
                 self._record(endpoint, e.status if e.status is not None else status, started, str(e))
                 raise

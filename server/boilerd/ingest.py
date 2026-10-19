@@ -98,6 +98,15 @@ def _seq(raw: list[dict]) -> dict[int, list]:
     return {x["p"]: x["v"] for x in raw if x.get("k") == ENERGY_KIND}
 
 
+def _months_consistent(seq: dict[int, list], fetched_at: datetime, tz: ZoneInfo) -> bool:
+    """The last p=4 value is the previous month; p=3 holds all of its days, so the two must agree."""
+    months = p4_months(fetched_at, len(seq[4]), tz)
+    prev_month = months[-1]
+    days = p3_days(fetched_at, len(seq[3]), tz)
+    total = sum((Decimal(str(v)) for d, v in zip(days, seq[3]) if d.replace(day=1) == prev_month), Decimal(0))
+    return abs(total - Decimal(str(seq[4][-1]))) <= CROSSCHECK_TOLERANCE
+
+
 async def store_consumption(conn: AsyncConnection, raw: list[dict], fetched_at: datetime,
                             tz: ZoneInfo) -> ConsumptionResult:
     seq = _seq(raw)
@@ -111,17 +120,21 @@ async def store_consumption(conn: AsyncConnection, raw: list[dict], fetched_at: 
                 "SET kwh = EXCLUDED.kwh, bucket_end = EXCLUDED.bucket_end, last_seen_at = EXCLUDED.last_seen_at",
                 (start, end, Decimal(str(v)), fetched_at, fetched_at))
             buckets += 1
-    if 3 in seq:
-        expected = p3_expected_len(fetched_at, tz)
-        if len(seq[3]) != expected:
-            warnings.append(f"p=3 has {len(seq[3])} days, expected {expected}; aligned from the end")
+    days_ok = 3 in seq and len(seq[3]) == p3_expected_len(fetched_at, tz)
+    if 3 in seq and not days_ok:
+        # the cloud has not rolled its day array yet (or changed shape): storing it would shift every day
+        warnings.append(f"p=3 has {len(seq[3])} days, expected {p3_expected_len(fetched_at, tz)}; days and months skipped")
+    months_ok = days_ok and 4 in seq and _months_consistent(seq, fetched_at, tz)
+    if days_ok and 4 in seq and not months_ok:
+        warnings.append("p=4 last month does not match the sum of its days in p=3; months skipped")
+    if days_ok:
         for d, v in zip(p3_days(fetched_at, len(seq[3]), tz), seq[3]):
             await conn.execute(
                 "INSERT INTO energy_day (day, kwh, source, last_seen_at) VALUES (%s,%s,'p3',%s) "
                 "ON CONFLICT (day) DO UPDATE SET kwh = EXCLUDED.kwh, source = 'p3', last_seen_at = EXCLUDED.last_seen_at",
                 (d, Decimal(str(v)), fetched_at))
             days += 1
-    if 4 in seq:
+    if months_ok:
         for m, v in zip(p4_months(fetched_at, len(seq[4]), tz), seq[4]):
             await conn.execute(
                 "INSERT INTO energy_month (month, kwh, source, last_seen_at) VALUES (%s,%s,'p4',%s) "
@@ -201,11 +214,11 @@ async def import_probe_log(conn: AsyncConnection, path: Path, tz: ZoneInfo) -> i
     return n
 
 
-async def tariff_at(conn: AsyncConnection, at: datetime) -> "Tariff":
+async def tariff_at(conn: AsyncConnection, at: datetime, tz: ZoneInfo) -> "Tariff":
     from .buckets import Tariff
     row = await (await conn.execute(
         "SELECT cheap_start, cheap_end, cheap_price, expensive_price, zone FROM tariff "
-        "WHERE valid_from <= %s::date ORDER BY valid_from DESC LIMIT 1", (at,))).fetchone()
+        "WHERE valid_from <= %s ORDER BY valid_from DESC LIMIT 1", (at.astimezone(tz).date(),))).fetchone()
     if row is None:
         row = await (await conn.execute(
             "SELECT cheap_start, cheap_end, cheap_price, expensive_price, zone FROM tariff "

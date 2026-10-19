@@ -9,7 +9,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from . import analytics
 from .events import reattribute_recent
@@ -32,7 +32,7 @@ Auth = Depends(require_token)
 
 class ActionIn(BaseModel):
     local_id: int
-    at: datetime
+    at: AwareDatetime
     kind: str
     trig: str
     detail: str
@@ -46,12 +46,19 @@ class ActionsBatch(BaseModel):
     actions: list[ActionIn] = Field(max_length=MAX_BATCH)
 
 
+class DesiredIn(BaseModel):
+    """The app's DesiredState; attribution and plan-vs-actual read power_on."""
+    power_on: bool
+    target_temp: int | None = None
+    eco: bool | None = None
+
+
 class IntentIn(BaseModel):
     install_id: str = Field(min_length=1, max_length=64)
-    at: datetime
+    at: AwareDatetime
     source: str
-    desired: dict
-    next_transition_at: datetime | None = None
+    desired: DesiredIn
+    next_transition_at: AwareDatetime | None = None
 
 
 def parse_step(step: str) -> timedelta:
@@ -62,7 +69,15 @@ def parse_step(step: str) -> timedelta:
     return timedelta(**{{"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}[unit]: n})
 
 
-def _range(frm: datetime | None, to: datetime | None, default: timedelta) -> tuple[datetime, datetime]:
+def as_local(d: datetime | None, tz) -> datetime | None:
+    """Times without an offset are local (Europe/Belgrade), never UTC."""
+    if d is None or d.tzinfo is not None:
+        return d
+    return d.replace(tzinfo=tz)
+
+
+def _range(frm: datetime | None, to: datetime | None, default: timedelta, tz=timezone.utc) -> tuple[datetime, datetime]:
+    frm, to = as_local(frm, tz), as_local(to, tz)
     to = to or datetime.now(timezone.utc)
     return (frm or to - default), to
 
@@ -88,7 +103,7 @@ async def post_intent(body: IntentIn, request: Request) -> Response:
         await conn.execute(
             "INSERT INTO app_intent (install_id, at, source, desired, next_transition_at) VALUES (%s,%s,%s,%s,%s) "
             "ON CONFLICT DO NOTHING",
-            (body.install_id, body.at, body.source, Jsonb(body.desired), body.next_transition_at))
+            (body.install_id, body.at, body.source, Jsonb(body.desired.model_dump()), body.next_transition_at))
     return Response(status_code=204)
 
 
@@ -101,7 +116,7 @@ async def get_now(request: Request) -> dict:
 @router.get("/series/state", dependencies=[Auth])
 async def get_series(request: Request, frm: Annotated[datetime | None, Query(alias="from")] = None,
                      to: datetime | None = None, step: str = "5m") -> list[dict]:
-    a, b = _range(frm, to, timedelta(hours=24))
+    a, b = _range(frm, to, timedelta(hours=24), request.app.state.settings.tz)
     async with request.app.state.pool.connection() as conn:
         return await analytics.state_series(conn, a, b, parse_step(step))
 
@@ -110,7 +125,7 @@ async def get_series(request: Request, frm: Annotated[datetime | None, Query(ali
 async def get_energy(request: Request, frm: Annotated[datetime | None, Query(alias="from")] = None,
                      to: datetime | None = None,
                      granularity: Literal["2h", "day", "month"] = "day") -> list[dict]:
-    a, b = _range(frm, to, timedelta(days=30))
+    a, b = _range(frm, to, timedelta(days=30), request.app.state.settings.tz)
     async with request.app.state.pool.connection() as conn:
         rows = await analytics.energy(conn, a, b, granularity, request.app.state.settings.tz)
     return [r.as_dict() for r in rows]
@@ -120,7 +135,7 @@ async def get_energy(request: Request, frm: Annotated[datetime | None, Query(ali
 async def get_events(request: Request, frm: Annotated[datetime | None, Query(alias="from")] = None,
                      to: datetime | None = None, kinds: str | None = None,
                      attribution: str | None = None) -> list[dict]:
-    a, b = _range(frm, to, timedelta(days=7))
+    a, b = _range(frm, to, timedelta(days=7), request.app.state.settings.tz)
     sql = "SELECT id, at, kind, attribution, severity, detail FROM event WHERE at >= %s AND at < %s"
     args: list = [a, b]
     if kinds:

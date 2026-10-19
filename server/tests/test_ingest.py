@@ -104,3 +104,31 @@ async def test_import_probe_log_idempotent(db):
         assert n1 >= 2 and n2 == n1
         assert (await count(conn, "state_sample"), await count(conn, "energy_2h")) == counts
         assert counts[0] >= 1 and counts[1] == 24
+
+
+async def test_unrolled_day_array_is_not_stored(db):
+    r = rec("cons_2026-10-18T0109.json")
+    async with db.connection() as conn:
+        res = await store_consumption(conn, r["body"], datetime.fromisoformat("2026-10-19T00:07:00+02:00"), TZ)
+        assert res.days == 0 and res.months == 0 and res.warnings
+        assert await count(conn, "energy_day") == 0 and await count(conn, "energy_month") == 0
+
+
+async def test_month_array_inconsistent_is_skipped(db):
+    r = rec("cons_2026-10-18T0109.json")
+    body = json.loads(json.dumps(r["body"]))
+    for x in body:
+        if x["p"] == 4:
+            x["v"] = x["v"][1:] + [99.0]      # looks shifted: last month no longer equals September's days
+    async with db.connection() as conn:
+        res = await store_consumption(conn, body, datetime.fromisoformat(r["ts"]), TZ)
+        assert res.days == 47 and res.months == 0 and res.warnings
+
+
+async def test_tariff_at_uses_local_date(db):
+    from boilerd.ingest import tariff_at
+    async with db.connection() as conn:
+        await conn.execute("INSERT INTO tariff VALUES ('2026-01-01', '00:00', '08:00', 4.0, 16.0, 'plava')")
+        t = await tariff_at(conn, datetime.fromisoformat("2026-01-01T00:30:00+01:00"), TZ)
+        await conn.execute("DELETE FROM tariff WHERE valid_from = '2026-01-01'")
+    assert t.cheap_price == Decimal("4.0")

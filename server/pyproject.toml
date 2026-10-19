@@ -3,13 +3,16 @@ name = "boilerd"
 version = "0.1.0"
 description = "DobarBoiler history server: read-only Ariston poller, analytics, REST and MCP"
 requires-python = ">=3.12"
+# pinned to the versions the suite was verified with; mcp 2.x renamed FastMCP to MCPServer
 dependencies = [
-  "fastapi>=0.115",
-  "uvicorn[standard]>=0.30",
-  "httpx>=0.27",
-  "psycopg[binary]>=3.2",
-  "psycopg-pool>=3.2",
-  "mcp>=1.10",
+  "fastapi==0.149.0",
+  "starlette==1.9.0",
+  "uvicorn[standard]==0.54.0",
+  "httpx==0.28.1",
+  "psycopg[binary]==3.3.6",
+  "psycopg-pool==3.3.3",
+  "mcp==2.3.0",
+  "pydantic==2.14.1",
 ]
 
 [project.optional-dependencies]

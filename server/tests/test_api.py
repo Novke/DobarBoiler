@@ -31,7 +31,8 @@ async def client(db):
 def batch(ids, at="2026-10-18T14:01:00+02:00"):
     return {"install_id": "inst", "actions": [
         {"local_id": i, "at": at, "kind": "CONVERGE", "trig": "USER", "detail": "temp 65",
-         "outcome": "SUCCESS", "attempt": 1, "state_json": None} for i in ids]}
+         "outcome": "SUCCESS", "attempt": 1,
+         "state_json": '{"powerOn":true,"targetTemp":65,"eco":true}'} for i in ids]}
 
 
 async def test_requires_token(client):
@@ -115,3 +116,12 @@ async def test_series_endpoint_and_step(client, db):
                            "on": True, "eco": True}]
     bad = await client.get("/api/v1/series/state", params={"step": "5 minutes"}, headers=AUTH)
     assert bad.status_code == 422
+
+
+async def test_intent_requires_power_on(client):
+    body = {"install_id": "inst", "at": "2026-10-18T07:30:00+02:00", "source": "DEFAULT_OFF",
+            "desired": {"on": False}, "next_transition_at": None}
+    assert (await client.post("/api/v1/app/intent", json=body, headers=AUTH)).status_code == 422
+    body["desired"] = {"power_on": False}
+    body["at"] = "2026-10-18T07:30:00"
+    assert (await client.post("/api/v1/app/intent", json=body, headers=AUTH)).status_code == 422
