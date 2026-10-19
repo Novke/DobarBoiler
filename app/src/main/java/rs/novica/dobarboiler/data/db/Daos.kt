@@ -168,6 +168,10 @@ interface ActionLogDao {
     @Query("SELECT * FROM action_log ORDER BY at DESC, id DESC LIMIT :limit")
     fun recent(limit: Int): Flow<List<ActionLogEntity>>
 
+    /** Rows above the upload high-water mark, oldest first (history-server sync). */
+    @Query("SELECT * FROM action_log WHERE id > :afterId ORDER BY id ASC LIMIT :limit")
+    suspend fun after(afterId: Long, limit: Int): List<ActionLogEntity>
+
     @Query("DELETE FROM action_log WHERE at < :cutoff")
     suspend fun pruneBefore(cutoff: Instant): Int
 }

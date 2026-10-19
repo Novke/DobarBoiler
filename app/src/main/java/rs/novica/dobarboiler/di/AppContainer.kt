@@ -18,6 +18,9 @@ import kotlinx.serialization.json.Json
 import rs.novica.dobarboiler.api.AristonApiClient
 import rs.novica.dobarboiler.api.AristonHttpClient
 import rs.novica.dobarboiler.data.ActionLogRepository
+import rs.novica.dobarboiler.data.ServerSync
+import rs.novica.dobarboiler.api.HistoryApiClient
+import rs.novica.dobarboiler.scheduling.ServerSyncWorker
 import rs.novica.dobarboiler.data.AppDatabase
 import rs.novica.dobarboiler.data.CredentialStore
 import rs.novica.dobarboiler.data.DeviceRepository
@@ -80,6 +83,20 @@ class AppContainer(private val app: Application) {
 
     val actionLog: ActionLogRepository by lazy { ActionLogRepository(db) }
 
+    /** History-server upload (design §5.1); null client = server not configured → no-op. */
+    val serverSync: ServerSync by lazy {
+        ServerSync(
+            fetchAfter = { after, limit -> actionLog.after(after, limit) },
+            store = settings,
+            clientFactory = {
+                val url = credentialStore.historyServerUrl
+                val token = credentialStore.historyServerToken
+                if (url == null || token == null) null else HistoryApiClient(url, token, json)
+            },
+            clock = clock,
+        )
+    }
+
     val engine: SchedulerEngine by lazy { DefaultSchedulerEngine(zone) }
 
     val alarmScheduler: AlarmScheduler by lazy { AlarmScheduler(app) }
@@ -99,6 +116,9 @@ class AppContainer(private val app: Application) {
             clock = clock,
         )
     }
+
+    /** Hourly history-server upload, unique "server_sync_periodic", KEEP. */
+    fun enqueueServerSync() = ServerSyncWorker.enqueuePeriodic(app)
 
     /** Periodic 6 h watchdog (SPEC §6.4): unique name "watchdog", KEEP, requires network. */
     fun enqueueWatchdog() {

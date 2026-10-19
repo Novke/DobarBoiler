@@ -53,7 +53,7 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
  * Note: `EngineConfig.fallbackPreset` is a code-level constant and is deliberately
  * NOT persisted — [update] transforms that change it have no lasting effect.
  */
-class SettingsStore(context: Context) {
+class SettingsStore(context: Context) : SyncStateStore {
 
     private val ds: DataStore<Preferences> = context.applicationContext.settingsDataStore
 
@@ -75,6 +75,26 @@ class SettingsStore(context: Context) {
 
     suspend fun updateRuntime(transform: (RuntimeState) -> RuntimeState) {
         ds.edit { prefs -> prefs.write(transform(prefs.toRuntimeState())) }
+    }
+
+    // -- History-server sync (design §5.1) ----------------------------------------
+
+    val sync: Flow<SyncState> = ds.data.map { it.toSyncState() }
+
+    override suspend fun syncState(): SyncState = ds.data.first().toSyncState()
+
+    override suspend fun updateSync(transform: (SyncState) -> SyncState) {
+        ds.edit { prefs -> prefs.writeSync(transform(prefs.toSyncState())) }
+    }
+
+    /** Stores the Converger's current intent, but only when it differs from the stored one apart from its time. */
+    suspend fun recordIntent(intentJson: String) {
+        ds.edit { prefs ->
+            val current = prefs.toSyncState()
+            if (!IntentCodec.sameIntent(current.lastIntentJson, intentJson)) {
+                prefs.writeSync(current.copy(lastIntentJson = intentJson))
+            }
+        }
     }
 
     // -- Focused writers (hot paths) -------------------------------------------
@@ -122,6 +142,12 @@ class SettingsStore(context: Context) {
         val RT_LAST_APPLIED_AT = longPreferencesKey("rt_last_applied_at")
         val RT_MANUAL_HOLD_UNTIL = longPreferencesKey("rt_manual_hold_until")
         val RT_LAST_CLOUD_CONTACT_AT = longPreferencesKey("rt_last_cloud_contact_at")
+        val SYNC_INSTALL_ID = stringPreferencesKey("rt_install_id")
+        val SYNC_LAST_ACTION_ID = longPreferencesKey("rt_last_uploaded_action_id")
+        val SYNC_INTENT_JSON = stringPreferencesKey("rt_last_intent_json")
+        val SYNC_INTENT_UPLOADED_JSON = stringPreferencesKey("rt_last_intent_uploaded_json")
+        val SYNC_OK_AT = longPreferencesKey("rt_last_sync_ok_at")
+        val SYNC_ERROR = stringPreferencesKey("rt_last_sync_error")
     }
 
     private fun Preferences.toAppSettings(): AppSettings {
@@ -230,6 +256,24 @@ class SettingsStore(context: Context) {
         setOrRemove(K.RT_LAST_APPLIED_AT, r.lastAppliedAt?.toEpochMilli())
         setOrRemove(K.RT_MANUAL_HOLD_UNTIL, r.manualHoldUntil?.toEpochMilli())
         setOrRemove(K.RT_LAST_CLOUD_CONTACT_AT, r.lastCloudContactAt?.toEpochMilli())
+    }
+
+    private fun Preferences.toSyncState(): SyncState = SyncState(
+        installId = this[K.SYNC_INSTALL_ID],
+        lastUploadedActionId = this[K.SYNC_LAST_ACTION_ID] ?: 0L,
+        lastIntentJson = this[K.SYNC_INTENT_JSON],
+        lastIntentUploadedJson = this[K.SYNC_INTENT_UPLOADED_JSON],
+        lastSyncOkAt = this[K.SYNC_OK_AT]?.let(Instant::ofEpochMilli),
+        lastSyncError = this[K.SYNC_ERROR],
+    )
+
+    private fun MutablePreferences.writeSync(s: SyncState) {
+        setOrRemove(K.SYNC_INSTALL_ID, s.installId)
+        this[K.SYNC_LAST_ACTION_ID] = s.lastUploadedActionId
+        setOrRemove(K.SYNC_INTENT_JSON, s.lastIntentJson)
+        setOrRemove(K.SYNC_INTENT_UPLOADED_JSON, s.lastIntentUploadedJson)
+        setOrRemove(K.SYNC_OK_AT, s.lastSyncOkAt?.toEpochMilli())
+        setOrRemove(K.SYNC_ERROR, s.lastSyncError)
     }
 
     private fun <T> MutablePreferences.setOrRemove(key: Preferences.Key<T>, value: T?) {
