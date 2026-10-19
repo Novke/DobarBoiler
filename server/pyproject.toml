@@ -1,0 +1,32 @@
+[project]
+name = "boilerd"
+version = "0.1.0"
+description = "DobarBoiler history server: read-only Ariston poller, analytics, REST and MCP"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "psycopg[binary]>=3.2",
+  "psycopg-pool>=3.2",
+  "mcp>=1.10",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "respx>=0.21"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["boilerd*"]
+
+[tool.setuptools.package-data]
+boilerd = ["migrations/*.sql"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]
