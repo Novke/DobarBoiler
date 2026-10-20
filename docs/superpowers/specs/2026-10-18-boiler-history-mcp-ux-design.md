@@ -261,6 +261,15 @@ Registracija: `claude mcp add --scope user --transport http dobarboiler http://1
 - Dashboard kao JSON u `server/grafana/boiler.json`, provisioning ili uvoz kroz API: temperatura + target +
   grejanje sa zatamnjenim jeftinim prozorom, 2 h stubići jeftino/skupo, dnevni i mesečni stubići, tabela
   događaja sa atribucijom, zdravlje pollera.
+- Energetski dashboardi (2026-10-20), generisani iz `server/grafana/build_dashboards.py`, samo SELECT nad istim
+  tabelama: **potrošnja i tarife** (kWh, % jeftino, dinari, „preplaćeno“, doba dana, mapa dan × 2 h, meseci),
+  **ušteda prema stalnoj temperaturi** (model ispod) i **izveštaji** (mesečna/dnevna/godišnja tabela, sezona).
+  Promenljiva „Cene“ množi cene sa 1.29 (PDV 20 % + akciza 7.5 %).
+- Model uštede, po 2 h periodu pokrivenom i potrošnjom i stanjem: zaliha = 0.09304 kWh/°C × (t_kraj − t_početak);
+  topla voda = kWh − zaliha − UA·(T_sr − T_sobe)·h; bojler na stalnih T_b = topla voda + UA·(T_b − T_sobe)·h po
+  ceni tog perioda; stvarni = kWh − zaliha, uz dogrevanje zalihe po jeftinoj ceni. UA podrazumevano 1.2 W/°C
+  (Velis Evo 80: 1.32 kWh/24 h na 65 °C), soba 20 °C; oba su promenljive na dashboardu. Razlika u kWh je tako samo
+  razlika u gubitku toplote, a razlika u dinarima dolazi od toga kada se struja kupuje.
 
 ### 4.9 Rezervna kopija
 

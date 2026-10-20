@@ -1,0 +1,1208 @@
+{
+ "uid": "dobarboiler-usteda",
+ "title": "DobarBoiler: ušteda prema stalnoj temperaturi",
+ "description": "Koliko struje i novca štedi grejanje noću u odnosu na bojler koji stalno drži istu temperaturu.",
+ "tags": [
+  "dobarboiler"
+ ],
+ "timezone": "Europe/Belgrade",
+ "schemaVersion": 41,
+ "version": 1,
+ "refresh": "10m",
+ "editable": true,
+ "graphTooltip": 1,
+ "time": {
+  "from": "now-30d/d",
+  "to": "now"
+ },
+ "timepicker": {
+  "refresh_intervals": [
+   "5m",
+   "10m",
+   "30m",
+   "1h"
+  ]
+ },
+ "templating": {
+  "list": [
+   {
+    "type": "custom",
+    "name": "tb",
+    "label": "Stalna temperatura (°C)",
+    "description": "Temperatura koju bi bojler držao ceo dan.",
+    "query": "40 : 40, 45 : 45, 50 : 50, 55 : 55, 60 : 60, 65 : 65",
+    "options": [
+     {
+      "text": "40",
+      "value": "40",
+      "selected": false
+     },
+     {
+      "text": "45",
+      "value": "45",
+      "selected": true
+     },
+     {
+      "text": "50",
+      "value": "50",
+      "selected": false
+     },
+     {
+      "text": "55",
+      "value": "55",
+      "selected": false
+     },
+     {
+      "text": "60",
+      "value": "60",
+      "selected": false
+     },
+     {
+      "text": "65",
+      "value": "65",
+      "selected": false
+     }
+    ],
+    "current": {
+     "text": "45",
+     "value": "45"
+    },
+    "hide": 0,
+    "multi": false,
+    "includeAll": false
+   },
+   {
+    "type": "custom",
+    "name": "ua",
+    "label": "Gubitak bojlera (W/°C)",
+    "description": "Koliko vati bojler gubi po °C razlike između vode i sobe. Fabrički podatak za Velis 80: ≈ 1.2.",
+    "query": "0.8 : 0.8, 1.0 : 1.0, 1.2 : 1.2, 1.5 : 1.5, 2.0 : 2.0",
+    "options": [
+     {
+      "text": "0.8",
+      "value": "0.8",
+      "selected": false
+     },
+     {
+      "text": "1.0",
+      "value": "1.0",
+      "selected": false
+     },
+     {
+      "text": "1.2",
+      "value": "1.2",
+      "selected": true
+     },
+     {
+      "text": "1.5",
+      "value": "1.5",
+      "selected": false
+     },
+     {
+      "text": "2.0",
+      "value": "2.0",
+      "selected": false
+     }
+    ],
+    "current": {
+     "text": "1.2",
+     "value": "1.2"
+    },
+    "hide": 0,
+    "multi": false,
+    "includeAll": false
+   },
+   {
+    "type": "custom",
+    "name": "amb",
+    "label": "Soba (°C)",
+    "description": "Temperatura prostorije u kojoj je bojler.",
+    "query": "15 : 15, 18 : 18, 20 : 20, 22 : 22",
+    "options": [
+     {
+      "text": "15",
+      "value": "15",
+      "selected": false
+     },
+     {
+      "text": "18",
+      "value": "18",
+      "selected": false
+     },
+     {
+      "text": "20",
+      "value": "20",
+      "selected": true
+     },
+     {
+      "text": "22",
+      "value": "22",
+      "selected": false
+     }
+    ],
+    "current": {
+     "text": "20",
+     "value": "20"
+    },
+    "hide": 0,
+    "multi": false,
+    "includeAll": false
+   },
+   {
+    "type": "custom",
+    "name": "porez",
+    "label": "Cene",
+    "description": "Cene iz tabele tarifa su bez PDV-a (20 %) i akcize (7.5 %). Sa porezima: × 1.29.",
+    "query": "bez poreza : 1, sa PDV-om i akcizom : 1.29",
+    "options": [
+     {
+      "text": "bez poreza",
+      "value": "1",
+      "selected": true
+     },
+     {
+      "text": "sa PDV-om i akcizom",
+      "value": "1.29",
+      "selected": false
+     }
+    ],
+    "current": {
+     "text": "bez poreza",
+     "value": "1"
+    },
+    "hide": 0,
+    "multi": false,
+    "includeAll": false
+   }
+  ]
+ },
+ "links": [
+  {
+   "title": "DobarBoiler",
+   "type": "dashboards",
+   "tags": [
+    "dobarboiler"
+   ],
+   "asDropdown": false,
+   "includeVars": false,
+   "keepTime": true
+  }
+ ],
+ "panels": [
+  {
+   "type": "stat",
+   "title": "Stvarno potrošeno",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT sum(act) AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "noValue": "nema podataka",
+     "decimals": 2,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#199e70"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Izmerena potrošnja u pokrivenim periodima, svedena na istu zalihu toplote: ako je bojler na kraju hladniji nego na početku, dodaje se struja za dogrevanje (po jeftinoj ceni, noću), a ako je topliji, oduzima se toplota koja je već plaćena unapred.",
+   "id": 1
+  },
+  {
+   "type": "stat",
+   "title": "Na ${tb} °C bi bilo",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT sum(base) AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "noValue": "nema podataka",
+     "decimals": 2,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#9085e9"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Procena za bojler koji stalno drži ${tb} °C (model ispod).",
+   "id": 2
+  },
+  {
+   "type": "stat",
+   "title": "Razlika u struji",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT sum(base) - sum(act) AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "noValue": "nema podataka",
+     "decimals": 2,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "text"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Pozitivno = potrošio si manje kWh nego što bi na stalnih ${tb} °C. Negativno = više kWh (jer noću greješ toplije), ali to ne znači da je skuplje: vidi dinare.",
+   "id": 3
+  },
+  {
+   "type": "stat",
+   "title": "Stvarno plaćeno",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT sum(act_din) AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#199e70"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "id": 4
+  },
+  {
+   "type": "stat",
+   "title": "Na ${tb} °C bi platio",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT sum(base * price) AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#9085e9"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "id": 5
+  },
+  {
+   "type": "stat",
+   "title": "Ušteda",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT sum(base * price) - sum(act_din) AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#e34948",
+        "value": null
+       },
+       {
+        "color": "#1a9e5a",
+        "value": 0
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Razlika u dinarima za pokriveni period, sa svedenom zalihom toplote.",
+   "id": 6
+  },
+  {
+   "type": "stat",
+   "title": "Ušteda u procentima",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT 100 * (sum(base * price) - sum(act_din)) / nullif(sum(base * price), 0) AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#e34948",
+        "value": null
+       },
+       {
+        "color": "#1a9e5a",
+        "value": 0
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "id": 7
+  },
+  {
+   "type": "stat",
+   "title": "Procena uštede za 30 dana",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 6,
+    "y": 4,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT (sum(base * price) - sum(act_din)) / nullif(sum(h), 0) * 24 * 30 AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#e34948",
+        "value": null
+       },
+       {
+        "color": "#1a9e5a",
+        "value": 0
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Ušteda iz pokrivenog perioda preračunata na 30 dana. Malo podataka = gruba procena.",
+   "id": 8
+  },
+  {
+   "type": "stat",
+   "title": "Procena uštede za godinu",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 4,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT (sum(base * price) - sum(act_din)) / nullif(sum(h), 0) * 24 * 365 AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#e34948",
+        "value": null
+       },
+       {
+        "color": "#1a9e5a",
+        "value": 0
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Grubo: potrošnja zimi je veća nego leti, pa je godišnja procena pouzdana tek posle više meseci.",
+   "id": 9
+  },
+  {
+   "type": "stat",
+   "title": "Pokriveno podacima",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 18,
+    "y": 4,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT sum(h) AS v FROM sv"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: h",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "text"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "none",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Sati u izabranom periodu za koje postoje i potrošnja (2 h) i temperatura (na 2 min). Rupe nastaju kad server ne radi ili Ariston ne odgovara.",
+   "id": 10
+  },
+  {
+   "type": "barchart",
+   "title": "Struja po danu: stvarno i na stalnih ${tb} °C",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT to_char(ls::date, 'DD.MM.') AS \"dan\", sum(act) AS \"stvarno\", sum(base) AS \"na stalnoj temp.\" FROM sv GROUP BY ls::date ORDER BY ls::date"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "custom": {
+      "fillOpacity": 90,
+      "lineWidth": 0,
+      "gradientMode": "none"
+     },
+     "decimals": 2
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "stvarno"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#199e70"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "na stalnoj temp."
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#9085e9"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "stacking": "none",
+    "xTickLabelRotation": -45,
+    "xTickLabelSpacing": 0,
+    "showValue": "never",
+    "groupWidth": 0.8,
+    "barWidth": 0.9,
+    "barRadius": 0.1,
+    "fullHighlight": false,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   },
+   "description": "Delimično pokriveni dani (rupe u podacima) su manji; vidi tabelu ispod.",
+   "id": 11
+  },
+  {
+   "type": "barchart",
+   "title": "Novac po danu: stvarno i na stalnih ${tb} °C",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 8,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT to_char(ls::date, 'DD.MM.') AS \"dan\", sum(act_din) AS \"stvarno\", sum(base * price) AS \"na stalnoj temp.\" FROM sv GROUP BY ls::date ORDER BY ls::date"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "custom": {
+      "fillOpacity": 90,
+      "lineWidth": 0,
+      "gradientMode": "none"
+     },
+     "decimals": 1
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "stvarno"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#199e70"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "na stalnoj temp."
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#9085e9"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "stacking": "none",
+    "xTickLabelRotation": -45,
+    "xTickLabelSpacing": 0,
+    "showValue": "never",
+    "groupWidth": 0.8,
+    "barWidth": 0.9,
+    "barRadius": 0.1,
+    "fullHighlight": false,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   },
+   "id": 12
+  },
+  {
+   "type": "timeseries",
+   "title": "Ukupna ušteda kroz vreme",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 17,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "time_series",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT bucket_end AS \"time\",\n  sum(base * price - act_din) OVER (ORDER BY bucket_start) AS \"ušteda din\"\nFROM sv ORDER BY bucket_start"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#1a9e5a"
+     },
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 12,
+      "lineInterpolation": "stepAfter",
+      "spanNulls": false,
+      "showPoints": "never"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "showLegend": false
+    },
+    "tooltip": {
+     "mode": "single"
+    }
+   },
+   "description": "Raste kad bi bojler na ${tb} °C dogrevao vodu po skupoj ceni (posle tuširanja preko dana), a stvarni bojler to dogreje noću po jeftinoj.",
+   "id": 13
+  },
+  {
+   "type": "timeseries",
+   "title": "Temperatura vode prema ${tb} °C",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 17,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "time_series",
+     "rawSql": "SELECT at AS \"time\", temp AS \"voda\", $tb::float8 AS \"na stalnoj temp.\"\nFROM state_sample WHERE $__timeFilter(at) ORDER BY at"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "celsius",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "spanNulls": 600000,
+      "showPoints": "never"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "voda"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#199e70"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "na stalnoj temp."
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#9085e9"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "na stalnoj temp."
+      },
+      "properties": [
+       {
+        "id": "custom.lineStyle",
+        "value": {
+         "fill": "dash",
+         "dash": [
+          10,
+          10
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": "Dok je voda toplija od ${tb} °C, bojler gubi više toplote nego zamišljeni; dok je hladnija, manje.",
+   "id": 14
+  },
+  {
+   "type": "table",
+   "title": "Po danima",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 26,
+    "w": 24,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nsv0 AS (\n  SELECT bk.*, extract(epoch FROM bk.bucket_end - bk.bucket_start) / 3600.0 AS h,\n         (SELECT count(*) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS n,\n         (SELECT avg(s.temp) FROM state_sample s WHERE s.at >= bk.bucket_start AND s.at < bk.bucket_end) AS tavg,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_start AND s.at > bk.bucket_start - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t0,\n         (SELECT s.temp FROM state_sample s WHERE s.at <= bk.bucket_end AND s.at > bk.bucket_end - interval '10 minutes'\n          ORDER BY s.at DESC LIMIT 1) AS t1\n  FROM bk WHERE bk.bucket_start >= $__timeFrom() AND bk.bucket_end <= $__timeTo()),\nsv AS (\n  SELECT bucket_start, bucket_end, ls, h, tavg, kwh, store,\n         kwh - store AS act,\n         (kwh * price - store * cp) * $porez AS act_din,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h AS voda,\n         kwh - store - $ua / 1000.0 * (tavg - $amb) * h + $ua / 1000.0 * ($tb - $amb) * h AS base,\n         price * $porez AS price\n  FROM (SELECT *, 0.09304 * (t1 - t0) AS store, CASE WHEN cheap THEN cp ELSE ep END AS price FROM sv0) x\n  WHERE t0 IS NOT NULL AND t1 IS NOT NULL AND n >= 22 * h)\nSELECT to_char(ls::date, 'DD.MM.YYYY') AS \"dan\", sum(h) AS \"sati sa podacima\",\n  round(avg(tavg)::numeric, 1) AS \"prosečna voda °C\",\n  round(sum(kwh)::numeric, 2) AS \"izmereno kWh\", round(sum(act)::numeric, 2) AS \"stvarno kWh\",\n  round(sum(base)::numeric, 2) AS \"na ${tb} °C kWh\",\n  round(sum(voda)::numeric, 2) AS \"topla voda kWh\",\n  round(sum(act_din)::numeric, 1) AS \"stvarno din\", round(sum(base * price)::numeric, 1) AS \"na ${tb} °C din\",\n  round((sum(base * price) - sum(act_din))::numeric, 1) AS \"ušteda din\"\nFROM sv GROUP BY ls::date ORDER BY ls::date DESC"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "inspect": false,
+      "minWidth": 60
+     },
+     "noValue": "—"
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "description": "„Izmereno“ = Ariston, „stvarno“ = izmereno svedeno na istu zalihu toplote. „Topla voda kWh“ = procena toplote odnete toplom vodom (isti broj u oba scenarija).",
+   "id": 15
+  },
+  {
+   "type": "text",
+   "title": "Kako se računa",
+   "gridPos": {
+    "x": 0,
+    "y": 35,
+    "w": 24,
+    "h": 13
+   },
+   "options": {
+    "mode": "markdown",
+    "content": "\n**Pitanje:** koliko bi struje i novca otišlo da bojler stalno drži **${tb} °C**, umesto da greje noću po jeftinoj\nstruji i bude ugašen preko dana?\n\n**Kako se računa** (za svaka 2 h za koja postoje i potrošnja sa Ariston servera i temperatura vode na 2 min):\n\n1. Bojler troši struju na dve stvari: na **toplu vodu koju potrošiš** i na **gubitak toplote** kroz izolaciju,\n   koji raste sa temperaturom vode.\n2. Toplota odneta vodom = izmerena struja − promena toplote u bojleru (80 L × 1.163 Wh po °C) − gubitak na\n   izmerenoj temperaturi.\n3. Bojler na stalnih ${tb} °C bi potrošio **istu toplu vodu**, dogrejao je **odmah** (po ceni tog doba dana) i\n   gubio bi toplotu na ${tb} °C, svaki sat.\n4. Stvarni bojler se svodi na istu zalihu toplote: ako je na kraju perioda hladniji nego na početku, dodaje se\n   dogrevanje po jeftinoj ceni (radi se noću).\n\nRazlika u **kWh** je zato samo razlika u gubitku toplote (toplija voda = veći gubitak), a razlika u **dinarima**\ndolazi najviše od toga **kada** se struja kupuje.\n\n**Pretpostavke** (menjaju se gore): gubitak **${ua} W po °C** razlike između vode i sobe (Ariston Velis 80:\nfabrički ≈ 1.3 kWh dnevno na 65 °C, tj. ≈ 1.2 W/°C), soba **${amb} °C**, cene iz tabele tarifa (plava zona).\n\n**Šta ovo ne meri:** ako voda padne ispod ${tb} °C (npr. posle tuširanja), u stvarnosti imaš manje tople vode\nnego zamišljeni bojler; računa se kao da je potrošena ista toplota. Temperatura sa bojlera je zaokružena na 1 °C,\npa pojedinačni dvosatni periodi šetaju; dnevni i mesečni zbirovi su pouzdani.\n"
+   },
+   "id": 16
+  }
+ ]
+}
