@@ -1,0 +1,944 @@
+{
+ "uid": "dobarboiler-potrosnja",
+ "title": "DobarBoiler: potrošnja i tarife",
+ "description": "Koliko struje troši bojler i koliko od toga u jeftinoj tarifi (00–08 h).",
+ "tags": [
+  "dobarboiler"
+ ],
+ "timezone": "Europe/Belgrade",
+ "schemaVersion": 41,
+ "version": 1,
+ "refresh": "10m",
+ "editable": true,
+ "graphTooltip": 1,
+ "time": {
+  "from": "now-30d/d",
+  "to": "now"
+ },
+ "timepicker": {
+  "refresh_intervals": [
+   "5m",
+   "10m",
+   "30m",
+   "1h"
+  ]
+ },
+ "templating": {
+  "list": [
+   {
+    "type": "custom",
+    "name": "porez",
+    "label": "Cene",
+    "description": "Cene iz tabele tarifa su bez PDV-a (20 %) i akcize (7.5 %). Sa porezima: × 1.29.",
+    "query": "bez poreza : 1, sa PDV-om i akcizom : 1.29",
+    "options": [
+     {
+      "text": "bez poreza",
+      "value": "1",
+      "selected": true
+     },
+     {
+      "text": "sa PDV-om i akcizom",
+      "value": "1.29",
+      "selected": false
+     }
+    ],
+    "current": {
+     "text": "bez poreza",
+     "value": "1"
+    },
+    "hide": 0,
+    "multi": false,
+    "includeAll": false
+   }
+  ]
+ },
+ "links": [
+  {
+   "title": "DobarBoiler",
+   "type": "dashboards",
+   "tags": [
+    "dobarboiler"
+   ],
+   "asDropdown": false,
+   "includeVars": false,
+   "keepTime": true
+  }
+ ],
+ "panels": [
+  {
+   "type": "stat",
+   "title": "Potrošeno",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nbd AS (\n  SELECT ls::date AS d, count(*) AS nb, sum(kwh) AS tot, coalesce(sum(kwh) FILTER (WHERE cheap), 0) AS ch\n  FROM bk GROUP BY 1),\ndy0 AS (\n  SELECT coalesce(ed.day, bd.d) AS d, coalesce(ed.kwh::float8, bd.tot) AS kwh, ed.day IS NULL AS partial,\n         bd.nb, bd.tot, bd.ch\n  FROM energy_day ed FULL JOIN bd ON bd.d = ed.day),\ndy AS (\n  SELECT dy0.d, dy0.kwh,\n         CASE WHEN dy0.partial THEN dy0.ch\n              WHEN dy0.nb >= 11 THEN CASE WHEN dy0.tot > 0 THEN dy0.ch * dy0.kwh / dy0.tot ELSE 0 END\n         END AS cheap,\n         t.cp * $porez AS cp, t.ep * $porez AS ep\n  FROM dy0 JOIN tar t ON dy0.d >= t.valid_from AND dy0.d < t.valid_to)\nSELECT sum(kwh) AS v FROM dy WHERE d BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'Europe/Belgrade')::date AND (($__timeTo()::timestamptz - interval '1 second') AT TIME ZONE 'Europe/Belgrade')::date"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "noValue": "nema podataka",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "text"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "none",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Ukupna potrošnja bojlera u izabranom periodu (Ariston, dnevni zbir).",
+   "id": 1
+  },
+  {
+   "type": "stat",
+   "title": "Jeftina struja",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nbd AS (\n  SELECT ls::date AS d, count(*) AS nb, sum(kwh) AS tot, coalesce(sum(kwh) FILTER (WHERE cheap), 0) AS ch\n  FROM bk GROUP BY 1),\ndy0 AS (\n  SELECT coalesce(ed.day, bd.d) AS d, coalesce(ed.kwh::float8, bd.tot) AS kwh, ed.day IS NULL AS partial,\n         bd.nb, bd.tot, bd.ch\n  FROM energy_day ed FULL JOIN bd ON bd.d = ed.day),\ndy AS (\n  SELECT dy0.d, dy0.kwh,\n         CASE WHEN dy0.partial THEN dy0.ch\n              WHEN dy0.nb >= 11 THEN CASE WHEN dy0.tot > 0 THEN dy0.ch * dy0.kwh / dy0.tot ELSE 0 END\n         END AS cheap,\n         t.cp * $porez AS cp, t.ep * $porez AS ep\n  FROM dy0 JOIN tar t ON dy0.d >= t.valid_from AND dy0.d < t.valid_to)\nSELECT 100 * sum(cheap) / nullif(sum(kwh) FILTER (WHERE cheap IS NOT NULL), 0) AS v FROM dy WHERE d BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'Europe/Belgrade')::date AND (($__timeTo()::timestamptz - interval '1 second') AT TIME ZONE 'Europe/Belgrade')::date"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#e34948",
+        "value": null
+       },
+       {
+        "color": "#c98500",
+        "value": 70
+       },
+       {
+        "color": "#1a9e5a",
+        "value": 90
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Udeo kWh potrošenih između ponoći i 8 h. Cilj je 100 %. Računa se samo za dane za koje postoji podela po 2 h (od 16. 10. 2026). Jeftino = 00–08 h po lokalnom vremenu.",
+   "id": 2
+  },
+  {
+   "type": "stat",
+   "title": "Plaćeno",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nbd AS (\n  SELECT ls::date AS d, count(*) AS nb, sum(kwh) AS tot, coalesce(sum(kwh) FILTER (WHERE cheap), 0) AS ch\n  FROM bk GROUP BY 1),\ndy0 AS (\n  SELECT coalesce(ed.day, bd.d) AS d, coalesce(ed.kwh::float8, bd.tot) AS kwh, ed.day IS NULL AS partial,\n         bd.nb, bd.tot, bd.ch\n  FROM energy_day ed FULL JOIN bd ON bd.d = ed.day),\ndy AS (\n  SELECT dy0.d, dy0.kwh,\n         CASE WHEN dy0.partial THEN dy0.ch\n              WHEN dy0.nb >= 11 THEN CASE WHEN dy0.tot > 0 THEN dy0.ch * dy0.kwh / dy0.tot ELSE 0 END\n         END AS cheap,\n         t.cp * $porez AS cp, t.ep * $porez AS ep\n  FROM dy0 JOIN tar t ON dy0.d >= t.valid_from AND dy0.d < t.valid_to)\nSELECT sum(cheap * cp + (kwh - cheap) * ep) AS v FROM dy WHERE d BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'Europe/Belgrade')::date AND (($__timeTo()::timestamptz - interval '1 second') AT TIME ZONE 'Europe/Belgrade')::date"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "text"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "none",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Cena struje za bojler u izabranom periodu. Računa se samo za dane za koje postoji podela po 2 h (od 16. 10. 2026). Jeftino = 00–08 h po lokalnom vremenu.",
+   "id": 3
+  },
+  {
+   "type": "stat",
+   "title": "Preplaćeno",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nbd AS (\n  SELECT ls::date AS d, count(*) AS nb, sum(kwh) AS tot, coalesce(sum(kwh) FILTER (WHERE cheap), 0) AS ch\n  FROM bk GROUP BY 1),\ndy0 AS (\n  SELECT coalesce(ed.day, bd.d) AS d, coalesce(ed.kwh::float8, bd.tot) AS kwh, ed.day IS NULL AS partial,\n         bd.nb, bd.tot, bd.ch\n  FROM energy_day ed FULL JOIN bd ON bd.d = ed.day),\ndy AS (\n  SELECT dy0.d, dy0.kwh,\n         CASE WHEN dy0.partial THEN dy0.ch\n              WHEN dy0.nb >= 11 THEN CASE WHEN dy0.tot > 0 THEN dy0.ch * dy0.kwh / dy0.tot ELSE 0 END\n         END AS cheap,\n         t.cp * $porez AS cp, t.ep * $porez AS ep\n  FROM dy0 JOIN tar t ON dy0.d >= t.valid_from AND dy0.d < t.valid_to)\nSELECT coalesce(sum((kwh - cheap) * (ep - cp)), 0) AS v FROM dy WHERE d BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'Europe/Belgrade')::date AND (($__timeTo()::timestamptz - interval '1 second') AT TIME ZONE 'Europe/Belgrade')::date"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "noValue": "nema podataka",
+     "decimals": 0,
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#1a9e5a",
+        "value": null
+       },
+       {
+        "color": "#c98500",
+        "value": 10
+       },
+       {
+        "color": "#e34948",
+        "value": 50
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Koliko je skuplje nego da je ista struja potrošena noću: skupi kWh × (skupa − jeftina cena). Računa se samo za dane za koje postoji podela po 2 h (od 16. 10. 2026). Jeftino = 00–08 h po lokalnom vremenu.",
+   "id": 4
+  },
+  {
+   "type": "stat",
+   "title": "Prosečno dnevno",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nbd AS (\n  SELECT ls::date AS d, count(*) AS nb, sum(kwh) AS tot, coalesce(sum(kwh) FILTER (WHERE cheap), 0) AS ch\n  FROM bk GROUP BY 1),\ndy0 AS (\n  SELECT coalesce(ed.day, bd.d) AS d, coalesce(ed.kwh::float8, bd.tot) AS kwh, ed.day IS NULL AS partial,\n         bd.nb, bd.tot, bd.ch\n  FROM energy_day ed FULL JOIN bd ON bd.d = ed.day),\ndy AS (\n  SELECT dy0.d, dy0.kwh,\n         CASE WHEN dy0.partial THEN dy0.ch\n              WHEN dy0.nb >= 11 THEN CASE WHEN dy0.tot > 0 THEN dy0.ch * dy0.kwh / dy0.tot ELSE 0 END\n         END AS cheap,\n         t.cp * $porez AS cp, t.ep * $porez AS ep\n  FROM dy0 JOIN tar t ON dy0.d >= t.valid_from AND dy0.d < t.valid_to)\nSELECT avg(kwh) AS v FROM dy WHERE d BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'Europe/Belgrade')::date AND (($__timeTo()::timestamptz - interval '1 second') AT TIME ZONE 'Europe/Belgrade')::date"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "noValue": "nema podataka",
+     "decimals": 2,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "text"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "none",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "Prosečna dnevna potrošnja u izabranom periodu.",
+   "id": 5
+  },
+  {
+   "type": "stat",
+   "title": "Skupa struja",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nbd AS (\n  SELECT ls::date AS d, count(*) AS nb, sum(kwh) AS tot, coalesce(sum(kwh) FILTER (WHERE cheap), 0) AS ch\n  FROM bk GROUP BY 1),\ndy0 AS (\n  SELECT coalesce(ed.day, bd.d) AS d, coalesce(ed.kwh::float8, bd.tot) AS kwh, ed.day IS NULL AS partial,\n         bd.nb, bd.tot, bd.ch\n  FROM energy_day ed FULL JOIN bd ON bd.d = ed.day),\ndy AS (\n  SELECT dy0.d, dy0.kwh,\n         CASE WHEN dy0.partial THEN dy0.ch\n              WHEN dy0.nb >= 11 THEN CASE WHEN dy0.tot > 0 THEN dy0.ch * dy0.kwh / dy0.tot ELSE 0 END\n         END AS cheap,\n         t.cp * $porez AS cp, t.ep * $porez AS ep\n  FROM dy0 JOIN tar t ON dy0.d >= t.valid_from AND dy0.d < t.valid_to)\nSELECT sum(kwh - cheap) AS v FROM dy WHERE d BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'Europe/Belgrade')::date AND (($__timeTo()::timestamptz - interval '1 second') AT TIME ZONE 'Europe/Belgrade')::date"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "noValue": "nema podataka",
+     "decimals": 2,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#d95926"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "wideLayout": true,
+    "showPercentChange": false
+   },
+   "description": "kWh potrošeni između 8 h i ponoći. Računa se samo za dane za koje postoji podela po 2 h (od 16. 10. 2026). Jeftino = 00–08 h po lokalnom vremenu.",
+   "id": 6
+  },
+  {
+   "type": "barchart",
+   "title": "Dnevna potrošnja: jeftino i skupo",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 16,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nbd AS (\n  SELECT ls::date AS d, count(*) AS nb, sum(kwh) AS tot, coalesce(sum(kwh) FILTER (WHERE cheap), 0) AS ch\n  FROM bk GROUP BY 1),\ndy0 AS (\n  SELECT coalesce(ed.day, bd.d) AS d, coalesce(ed.kwh::float8, bd.tot) AS kwh, ed.day IS NULL AS partial,\n         bd.nb, bd.tot, bd.ch\n  FROM energy_day ed FULL JOIN bd ON bd.d = ed.day),\ndy AS (\n  SELECT dy0.d, dy0.kwh,\n         CASE WHEN dy0.partial THEN dy0.ch\n              WHEN dy0.nb >= 11 THEN CASE WHEN dy0.tot > 0 THEN dy0.ch * dy0.kwh / dy0.tot ELSE 0 END\n         END AS cheap,\n         t.cp * $porez AS cp, t.ep * $porez AS ep\n  FROM dy0 JOIN tar t ON dy0.d >= t.valid_from AND dy0.d < t.valid_to)\nSELECT to_char(d, 'DD.MM.') AS \"dan\", cheap AS \"jeftino (00–08)\",\n  kwh - cheap AS \"skupo (08–24)\", CASE WHEN cheap IS NULL THEN kwh END AS \"bez podele\"\nFROM dy WHERE d BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'Europe/Belgrade')::date AND (($__timeTo()::timestamptz - interval '1 second') AT TIME ZONE 'Europe/Belgrade')::date ORDER BY d"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "custom": {
+      "fillOpacity": 90,
+      "lineWidth": 0,
+      "gradientMode": "none"
+     },
+     "decimals": 2
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "jeftino (00–08)"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#3987e5"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "skupo (08–24)"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#d95926"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "bez podele"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#8e8c84"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "stacking": "normal",
+    "xTickLabelRotation": -45,
+    "xTickLabelSpacing": 0,
+    "showValue": "never",
+    "groupWidth": 0.8,
+    "barWidth": 0.9,
+    "barRadius": 0.1,
+    "fullHighlight": false,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   },
+   "description": "„Bez podele“ = dani pre 16. 10. 2026, za koje Ariston čuva samo dnevni zbir, bez satnice.",
+   "id": 7
+  },
+  {
+   "type": "barchart",
+   "title": "U koje doba dana se troši",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 4,
+    "w": 8,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to)\nSELECT to_char(ls, 'HH24') || '–' || to_char(ls + interval '2 hours', 'HH24') AS \"sati\",\n  sum(kwh) FILTER (WHERE cheap) AS \"jeftino\", sum(kwh) FILTER (WHERE NOT cheap) AS \"skupo\"\nFROM bk WHERE bucket_start >= $__timeFrom() AND bucket_start < $__timeTo()\nGROUP BY extract(hour FROM ls), 1 ORDER BY extract(hour FROM ls)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "custom": {
+      "fillOpacity": 90,
+      "lineWidth": 0,
+      "gradientMode": "none"
+     },
+     "decimals": 2
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "jeftino"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#3987e5"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "skupo"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#d95926"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "stacking": "normal",
+    "xTickLabelRotation": -45,
+    "xTickLabelSpacing": 0,
+    "showValue": "never",
+    "groupWidth": 0.8,
+    "barWidth": 0.9,
+    "barRadius": 0.1,
+    "fullHighlight": false,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   },
+   "description": "Zbir potrošnje po dvosatnim periodima u izabranom periodu. Idealno je sve levo od 08 h.",
+   "id": 8
+  },
+  {
+   "type": "barchart",
+   "title": "Dnevni trošak u dinarima",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 13,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nbd AS (\n  SELECT ls::date AS d, count(*) AS nb, sum(kwh) AS tot, coalesce(sum(kwh) FILTER (WHERE cheap), 0) AS ch\n  FROM bk GROUP BY 1),\ndy0 AS (\n  SELECT coalesce(ed.day, bd.d) AS d, coalesce(ed.kwh::float8, bd.tot) AS kwh, ed.day IS NULL AS partial,\n         bd.nb, bd.tot, bd.ch\n  FROM energy_day ed FULL JOIN bd ON bd.d = ed.day),\ndy AS (\n  SELECT dy0.d, dy0.kwh,\n         CASE WHEN dy0.partial THEN dy0.ch\n              WHEN dy0.nb >= 11 THEN CASE WHEN dy0.tot > 0 THEN dy0.ch * dy0.kwh / dy0.tot ELSE 0 END\n         END AS cheap,\n         t.cp * $porez AS cp, t.ep * $porez AS ep\n  FROM dy0 JOIN tar t ON dy0.d >= t.valid_from AND dy0.d < t.valid_to)\nSELECT to_char(d, 'DD.MM.') AS \"dan\", cheap * cp AS \"jeftina struja\",\n  (kwh - cheap) * ep AS \"skupa struja\"\nFROM dy WHERE d BETWEEN ($__timeFrom()::timestamptz AT TIME ZONE 'Europe/Belgrade')::date AND (($__timeTo()::timestamptz - interval '1 second') AT TIME ZONE 'Europe/Belgrade')::date AND cheap IS NOT NULL ORDER BY d"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: din",
+     "custom": {
+      "fillOpacity": 90,
+      "lineWidth": 0,
+      "gradientMode": "none"
+     },
+     "decimals": 1
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "jeftina struja"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#3987e5"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "skupa struja"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#d95926"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "stacking": "normal",
+    "xTickLabelRotation": -45,
+    "xTickLabelSpacing": 0,
+    "showValue": "never",
+    "groupWidth": 0.8,
+    "barWidth": 0.9,
+    "barRadius": 0.1,
+    "fullHighlight": false,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   },
+   "description": "Samo dani sa podelom po 2 h. Cene: tabela tarifa (plava zona), promenljiva „Cene“ dodaje porez.",
+   "id": 9
+  },
+  {
+   "type": "status-history",
+   "title": "Mapa potrošnje: dan × doba dana",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 13,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to)\nSELECT date_trunc('day', ls) AT TIME ZONE 'Europe/Belgrade' AS \"time\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 22) AS \"22–24\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 20) AS \"20–22\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 18) AS \"18–20\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 16) AS \"16–18\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 14) AS \"14–16\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 12) AS \"12–14\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 10) AS \"10–12\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 8) AS \"08–10\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 6) AS \"06–08 jeftino\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 4) AS \"04–06 jeftino\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 2) AS \"02–04 jeftino\", sum(kwh) FILTER (WHERE extract(hour FROM ls) = 0) AS \"00–02 jeftino\"\nFROM bk WHERE bucket_start >= $__timeFrom() AND bucket_start < $__timeTo() GROUP BY 1 ORDER BY 1"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "decimals": 2,
+     "noValue": "",
+     "color": {
+      "mode": "continuous-purples"
+     },
+     "min": 0,
+     "custom": {
+      "fillOpacity": 100,
+      "lineWidth": 1
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showValue": "never",
+    "rowHeight": 0.9,
+    "colWidth": 0.95,
+    "legend": {
+     "showLegend": false
+    },
+    "tooltip": {
+     "mode": "single"
+    }
+   },
+   "description": "Svaka kolona je jedan dan, svaki red dvosatni period. Svetlije = više kWh.",
+   "id": 10
+  },
+  {
+   "type": "barchart",
+   "title": "Mesečna potrošnja (cela istorija)",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 22,
+    "w": 14,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "WITH tar AS (\n  SELECT valid_from, coalesce(lead(valid_from) OVER (ORDER BY valid_from), 'infinity'::date) AS valid_to,\n         cheap_start, cheap_end, cheap_price::float8 AS cp, expensive_price::float8 AS ep\n  FROM tariff),\nbk AS (\n  SELECT e.bucket_start, e.bucket_end, e.kwh::float8 AS kwh, e.bucket_start AT TIME ZONE 'Europe/Belgrade' AS ls,\n         ((e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time >= t.cheap_start\n          AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::time < t.cheap_end) AS cheap,\n         t.cp, t.ep\n  FROM energy_2h e\n  JOIN tar t ON (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date >= t.valid_from\n            AND (e.bucket_start AT TIME ZONE 'Europe/Belgrade')::date < t.valid_to),\nbd AS (\n  SELECT ls::date AS d, count(*) AS nb, sum(kwh) AS tot, coalesce(sum(kwh) FILTER (WHERE cheap), 0) AS ch\n  FROM bk GROUP BY 1),\ndy0 AS (\n  SELECT coalesce(ed.day, bd.d) AS d, coalesce(ed.kwh::float8, bd.tot) AS kwh, ed.day IS NULL AS partial,\n         bd.nb, bd.tot, bd.ch\n  FROM energy_day ed FULL JOIN bd ON bd.d = ed.day),\ndy AS (\n  SELECT dy0.d, dy0.kwh,\n         CASE WHEN dy0.partial THEN dy0.ch\n              WHEN dy0.nb >= 11 THEN CASE WHEN dy0.tot > 0 THEN dy0.ch * dy0.kwh / dy0.tot ELSE 0 END\n         END AS cheap,\n         t.cp * $porez AS cp, t.ep * $porez AS ep\n  FROM dy0 JOIN tar t ON dy0.d >= t.valid_from AND dy0.d < t.valid_to),\nmo AS (\n  SELECT date_trunc('month', d)::date AS m, sum(kwh) AS kwh_days, sum(cheap) AS ch, sum(kwh - cheap) AS ex,\n         sum(cheap * cp + (kwh - cheap) * ep) AS din, sum((kwh - cheap) * (ep - cp)) AS kazna,\n         count(*) AS nd, count(cheap) AS nsplit\n  FROM dy GROUP BY 1),\nmm AS (\n  SELECT coalesce(em.month, mo.m) AS m, coalesce(em.kwh::float8, mo.kwh_days) AS kwh,\n         coalesce(mo.ch, 0) AS ch, coalesce(mo.ex, 0) AS ex, mo.din, mo.kazna, coalesce(mo.nsplit, 0) AS nsplit\n  FROM energy_month em FULL JOIN mo ON mo.m = em.month\n  WHERE coalesce(em.month, mo.m) >= (SELECT min(month) FROM energy_month WHERE kwh > 0))\nSELECT (ARRAY['jan','feb','mar','apr','maj','jun','jul','avg','sep','okt','nov','dec'])[extract(month FROM m)::int] || ' ' || to_char(m, 'YY') AS \"mesec\",\n  ch AS \"jeftino\", ex AS \"skupo\",\n  greatest(kwh - ch - ex, 0) AS \"bez podele\"\nFROM mm ORDER BY m"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "custom": {
+      "fillOpacity": 90,
+      "lineWidth": 0,
+      "gradientMode": "none"
+     },
+     "decimals": 1
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "jeftino"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#3987e5"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "skupo"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#d95926"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "bez podele"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#8e8c84"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "stacking": "normal",
+    "xTickLabelRotation": -45,
+    "xTickLabelSpacing": 0,
+    "showValue": "never",
+    "groupWidth": 0.8,
+    "barWidth": 0.9,
+    "barRadius": 0.1,
+    "fullHighlight": false,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   },
+   "description": "Ne zavisi od izabranog perioda. Ariston čuva mesečne zbirove od juna 2025; podela na jeftino/skupo postoji od 16. 10. 2026.",
+   "id": 11
+  },
+  {
+   "type": "table",
+   "title": "Grejanje u skupoj tarifi",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "dobarboiler"
+   },
+   "gridPos": {
+    "x": 14,
+    "y": 22,
+    "w": 10,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "dobarboiler"
+     },
+     "rawQuery": true,
+     "editorMode": "code",
+     "format": "table",
+     "rawSql": "SELECT to_char(at AT TIME ZONE 'Europe/Belgrade', 'DD.MM. HH24:MI') AS \"vreme\",\n  CASE attribution WHEN 'app' THEN 'aplikacija' WHEN 'external' THEN 'spolja (Ariston app / dugme)'\n    WHEN 'firmware' THEN 'bojler, termostat' WHEN 'firmware_eco' THEN 'bojler, eco' ELSE 'nepoznato' END AS \"uzrok\",\n  detail->>'temp' AS \"voda °C\", detail->>'target' AS \"cilj °C\",\n  CASE WHEN (detail->>'eco')::boolean THEN 'da' ELSE 'ne' END AS \"eco\"\nFROM event\nWHERE $__timeFilter(at) AND kind = 'expensive_heating_started'\nORDER BY at DESC LIMIT 200"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "inspect": false,
+      "minWidth": 60
+     },
+     "noValue": "—"
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "description": "Svaki početak grejanja između 8 h i ponoći (i grejanje koje se produži posle 8 h), sa procenom ko ga je izazvao. Prazno = sve je bilo noću.",
+   "id": 12
+  }
+ ]
+}

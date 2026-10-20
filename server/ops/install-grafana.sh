@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Adds the DobarBoiler Postgres datasource to the shared observability Grafana and imports the dashboard.
+# Adds the DobarBoiler Postgres datasource to the shared observability Grafana and imports the dashboards.
 # Idempotent. Needs DOBARBOILER_RO_PASSWORD in /data/srv/observability/.env
 # (ops/add-secrets.ps1 puts it into SSM /dev/observability/env; then: ssm-env observability /data/srv/observability/.env).
 # Secrets are read inside this process and never printed.
@@ -61,13 +61,7 @@ bind="$(grep -E '^GRAFANA_HOST_BIND=' "$OBS/.env" | cut -d= -f2- || true)"
 url="http://${bind:-127.0.0.1:3300}"
 for _ in $(seq 1 30); do curl -sf "$url/api/health" >/dev/null && break; sleep 2; done
 
-python3 -I - "$HERE/../grafana/boiler.json" > /data/tmp/dobarboiler-dashboard-import.json <<'PY'
-import json, sys
-print(json.dumps({"dashboard": json.load(open(sys.argv[1])), "overwrite": True}))
-PY
-curl -sf -u "admin:$pw" -H 'Content-Type: application/json' -X POST "$url/api/dashboards/db" \
-  --data-binary @/data/tmp/dobarboiler-dashboard-import.json | python3 -I -c 'import sys,json; print("dashboard:", json.load(sys.stdin).get("status"))'
+bash "$HERE/import-dashboards.sh"
 curl -s -u "admin:$pw" "$url/api/datasources/uid/dobarboiler/health" | python3 -I -c 'import sys,json; print("datasource:", json.load(sys.stdin).get("status"))'
-rm -f /data/tmp/dobarboiler-dashboard-import.json
 unset pw
 echo "Grafana: $url/d/dobarboiler"
