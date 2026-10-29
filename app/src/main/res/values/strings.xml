@@ -128,6 +128,7 @@
     <string name="set_max_setpoint">Maksimalna temperatura (bojler)</string>
     <string name="set_boost_timeout">Maksimalno trajanje boosta</string>
     <string name="set_account">Nalog</string>
+    <string name="set_version">Verzija aplikacije</string>
     <string name="set_health">Pouzdanost</string>
     <string name="srv_title">Server istorije</string>
     <string name="srv_url">Adresa servera</string>

@@ -46,6 +46,11 @@ Live API smoke test (Python reference library `ariston`, use a venv — PEP 668)
 
 No lint config, no instrumented tests, no CI.
 
+Release to the phone: `bash tools/release-apk.sh` (origin/master, tests, then `http://novica-dev/boiler-apk/`;
+GitGud button **Izdaj APK**). APKs must be signed with the stable key `/data/keys/dobarboiler/signing.keystore`
+(configured in `~/.gradle/gradle.properties`), or the phone refuses them as an update; versions come from git.
+Details and key restore: `docs/release.md`.
+
 ## Where the truth lives
 
 - `docs/SPEC.md` — **authoritative implementation spec**. Its Kotlin signatures are *frozen contracts*; §0 lists

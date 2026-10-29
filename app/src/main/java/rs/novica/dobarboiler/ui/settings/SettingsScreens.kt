@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import rs.novica.dobarboiler.BuildConfig
 import rs.novica.dobarboiler.R
 import rs.novica.dobarboiler.di.AppContainer
 import rs.novica.dobarboiler.domain.BandConfig
@@ -297,6 +298,10 @@ fun SettingsRootScreen(
             SettingsNavItem(stringResource(R.string.set_health), onOpenHealth)
             SettingsNavItem(stringResource(R.string.srv_title), onOpenServer, serverStatusLabel(serverStatusNow))
             SettingsNavItem(stringResource(R.string.set_account), onOpenAccount)
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.set_version)) },
+                supportingContent = { Text(BuildConfig.VERSION_NAME) },
+            )
         }
     }
 }

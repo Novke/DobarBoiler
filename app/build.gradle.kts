@@ -8,6 +8,25 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Version from git, so every APK installs over the previous one: versionCode = minutes between
+// 2026-01-01 UTC and the HEAD commit time (monotonic along master), versionName = commit date + hash.
+fun git(vararg args: String): String? = runCatching {
+    providers.exec {
+        commandLine("git", *args)
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().ifEmpty { null }
+}.getOrNull()
+
+val gitCommitEpoch = git("log", "-1", "--format=%ct")?.toLongOrNull()
+val gitVersionCode = gitCommitEpoch?.let { ((it - 1_767_225_600L) / 60).toInt() } ?: 1
+val gitVersionName = git("log", "-1", "--format=%cd-%h", "--date=format:%Y.%m.%d")
+    ?.let { if (git("status", "--porcelain", "--untracked-files=no") != null) "$it-dirty" else it }
+    ?: "dev"
+
+// Stable signing key, configured outside the repo in ~/.gradle/gradle.properties (see tools/release-apk.sh).
+// Without it builds fall back to the machine's own debug key, and the phone will refuse them as an update.
+val signingStoreFile = providers.gradleProperty("dobarboiler.signing.storeFile").orNull
+
 android {
     namespace = "rs.novica.dobarboiler"
     compileSdk = 35
@@ -16,13 +35,25 @@ android {
         applicationId = "rs.novica.dobarboiler"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = gitVersionCode
+        versionName = gitVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (signingStoreFile != null) {
+            create("stable") {
+                storeFile = file(signingStoreFile)
+                storePassword = providers.gradleProperty("dobarboiler.signing.storePassword").get()
+                keyAlias = providers.gradleProperty("dobarboiler.signing.keyAlias").get()
+                keyPassword = providers.gradleProperty("dobarboiler.signing.keyPassword").get()
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("stable")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -32,6 +63,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("stable") ?: signingConfigs.getByName("debug")
         }
     }
 
@@ -42,6 +74,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
