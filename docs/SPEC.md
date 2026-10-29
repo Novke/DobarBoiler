@@ -112,6 +112,7 @@ sealed class AristonException(message: String, cause: Throwable? = null) : Excep
     class AuthFailed(message: String) : AristonException(message)          // re-login failed or double 405
     class RateLimited(message: String) : AristonException(message)         // 429 — DO NOT auto-retry
     class Transient(message: String, cause: Throwable? = null) : AristonException(message, cause) // 5xx/timeout after 1 retry
+    class DeviceOffline(message: String) : AristonException(message)       // 5xx "M2M platform error … 404": gateway unreachable (§7.5)
     class NotFound : AristonException("404")                               // callers usually map to null
 }
 
@@ -155,9 +156,11 @@ Per request (except login itself):
    Re-login failure → `AuthFailed("login failed — password changed?")`.
 3. On **404**: throw `NotFound` (GET state callers map it; SET callers treat as failure).
 4. On **429**: throw `RateLimited` immediately — no retry (higher layers back off via WorkManager).
-5. On any other non-2xx or IOException: sleep 5 s, retry **once**; then throw `Transient`.
-6. 2xx with empty body → success (`Unit`); with body → decode with `Json { ignoreUnknownKeys = true }`.
-7. A `Mutex` serializes login so concurrent 405s don't stampede.
+5. On **5xx whose body contains `M2M platform error` and `Http status: 404`**: throw `DeviceOffline`
+   immediately — the cloud cannot reach the boiler's gateway (§7.5); a 5 s retry cannot fix that.
+6. On any other non-2xx or IOException: sleep 5 s, retry **once**; then throw `Transient`.
+7. 2xx with empty body → success (`Unit`); with body → decode with `Json { ignoreUnknownKeys = true }`.
+8. A `Mutex` serializes login so concurrent 405s don't stampede.
 
 Bare-boolean bodies: `"true"`/`"false"`.toRequestBody(`"application/json; charset=utf-8"`.toMediaType()).
 
@@ -508,6 +511,7 @@ data class RuntimeState(
     val lastAppliedAt: Instant?,
     val manualHoldUntil: Instant?,           // §7.4
     val lastCloudContactAt: Instant?,
+    val deviceOfflineSince: Instant? = null, // §7.5 — first M2M 404 of the current outage (key rt_device_offline_since)
 )
 
 class SettingsStore(context: android.content.Context) {
@@ -652,6 +656,8 @@ class Notifier(private val context: android.content.Context) {
     fun manualChangeDetected(untilLabel: String)                      // EVENTS, id 2001
     fun scheduledEvent(text: String)                                  // EVENTS, id 2002 (window ok, vacation resumed, override expired)
     fun hbtLate(shortfallC: Int)                                      // ERRORS, id 1004
+    fun deviceOffline(sinceLabel: String)                             // ERRORS, id 1005, ongoing, only-alert-once (§7.5)
+    fun deviceOnline(outageLabel: String)                             // cancels 1005; EVENTS, id 2003
     fun boostOngoing(currentTemp: Double, target: Int, etaMinutes: Long?): android.app.Notification // FGS notif, id 3001
     fun boostDone(target: Int)                                        // BOOST, id 3002
     fun boostTimeout(currentTemp: Double)                             // BOOST, id 3003
@@ -712,6 +718,7 @@ object LogKinds {   // action_log.kind values
     const val OVERRIDE_EXPIRED="OVERRIDE_EXPIRED"; const val MANUAL_CHANGE="MANUAL_CHANGE_DETECTED"
     const val REASSERT="REASSERT"; const val VERIFY="VERIFY_POLL"; const val COMMAND_FAILED="COMMAND_FAILED"
     const val DRIFT="DRIFT_CORRECTED"; const val CONVERGE="CONVERGE"
+    const val DEVICE_OFFLINE="DEVICE_OFFLINE"; const val DEVICE_ONLINE="DEVICE_ONLINE"   // §7.5, no state_json
 }
 object Triggers { const val ALARM="ALARM"; const val BOOT="BOOT"; const val WATCHDOG="WATCHDOG"
                   const val USER="USER"; const val VERIFY="VERIFY"; const val BAND="BAND"; const val BOOST="BOOST" }
@@ -790,6 +797,7 @@ caps and no added value.
 | `WatchdogWorker` | periodic 6 h, unique `"watchdog"`, KEEP, requires network. Checks: transition alarm armed & `nextTransitionAt` in future (else `converge(WATCHDOG)`); `canScheduleExact()`; notification permission; prunes logs/samples; if `nextTransitionAt < now` → missed alarm → converge. |
 | `BandWorker` | advanced mode tick: `device.refresh(ZERO)`; if Band config active and desired source is window: `temp >= stopAt` → `SetPower(false)`; `temp <= restartAt` → `SetPower(true)`; then re-arm `armBandTick(now + pollEvery)` while still inside window. In Simple mode (mid-window check) it only polls + manual-change detection via `converge(Triggers.BAND, pollFresh=false)`-style verify. |
 | `ServerSyncWorker` | History-server upload (design `docs/superpowers/specs/2026-10-18-boiler-history-mcp-ux-design.md` §5.1). One-time unique `"server_sync"` (REPLACE, 15 s delay, network) enqueued after every `converge()` outside the mutex, plus periodic 1 h `"server_sync_periodic"` (KEEP). Runs `ServerSync.run()`: `action_log` rows with `id > lastUploadedActionId` in batches of 200 to `POST api/v1/app/actions` (mark advances only after 2xx; the server is idempotent on `(install_id, local_id)`), then the latest intent (`Converger` stores `IntentCodec.encode(res, now)` via `SettingsStore.recordIntent`, deduplicated without its timestamp) to `POST api/v1/app/intent`. No server configured → no-op. Failures: `Result.retry()` up to 5 attempts, never a notification and never an `action_log` row; shown only under Settings → Server istorije. Sync state lives in DataStore keys `rt_install_id`, `rt_last_uploaded_action_id`, `rt_last_intent_json`, `rt_last_intent_uploaded_json`, `rt_last_sync_ok_at`, `rt_last_sync_error` (no Room change). |
+| `LinkCheckWorker` | §7.5. Periodic 15 min, unique `"link_check"` (KEEP, network), plus one-time `"link_confirm"` (KEEP, 5 min delay) enqueued when an outage starts. `device.refresh(5 min)` while online, `refresh(ZERO)` during an outage. `DeviceOffline` → `linkMonitor.reportOffline(WATCHDOG)`; success that ends an outage → `converge(WATCHDOG)`; any other error is ignored (next period). Always `Result.success()`. |
 | `BoostTimeoutWorker` | if active boost uncompleted → `schedule.completeBoost(id, "TIMEOUT")`, `converge(Triggers.BOOST)`, `notifier.boostTimeout(temp)`. Guards against a dead BoostService. |
 
 ### 6.5 BoostService (foreground, `specialUse`)
@@ -851,6 +859,7 @@ intent-filter with the 5 actions §6.3), `.scheduling.BoostService` (exported=fa
 | Worker | exponential backoff from 30 s, up to 7 attempts (~1 h span), then FAILED + notification |
 | Window-end OFF failure | extra 30-min retry chain until success or next transition supersedes; notify after 30 min |
 | Watchdog | 6 h periodic re-convergence — nothing stays broken longer than 6 h |
+| Boiler without power | `DeviceOffline` is retried like any failure, but the final `actionFailed` is skipped — the §7.5 alert covers it |
 
 ### 7.3 Time semantics
 
@@ -864,6 +873,26 @@ Default `RESPECT_UNTIL_NEXT_TRANSITION` via `manualHoldUntil` (§6.2 step 4). De
 (verify polls, mid-window/band polls, boost polls, app-open refresh) — simple mode does not poll all night.
 Dashboard shows "Ručna promena — važi do %s" + button "Vrati na plan" (clears the hold, converges with
 `Triggers.USER`). `REASSERT` policy re-applies desired state on detection.
+
+### 7.5 Boiler without power (offline alert)
+
+The boiler's power switch sometimes trips and must be flipped by hand. The cloud then answers every device
+call with `500 ":-( M2M platform error from <gw> (Http status: 404 - Not Found)"` (observed for 48 h,
+2026-10-27..29), which the client maps to `DeviceOffline` (§2.3).
+
+- `scheduling/DeviceLinkMonitor` keeps `RuntimeState.deviceOfflineSince`; the pure `domain/DeviceLink`
+  decides. First observation → start the clock, log `DEVICE_OFFLINE`/RETRYING, enqueue the confirm check.
+  Observation ≥ `DeviceLink.CONFIRM_AFTER` (3 min) after the start → post `Notifier.deviceOffline`
+  (an isolated M2M 404 happened once on 2026-10-25 with the boiler fine, hence the confirmation).
+- The alert is ongoing, HIGH, not auto-cancelled, only-alert-once, and re-posted on every observation
+  (`LinkCheckWorker` every 15 min), so "Obriši sve" never clears it and a swipe (allowed on Android 14+)
+  only hides it until the next check. The dashboard shows the same text as a card with "Proveri ponovo".
+- A successful read whose snapshot is newer than `deviceOfflineSince` ends the outage: clear the field
+  and `lastAppliedState*` (post-outage state is drift, not a manual change), log `DEVICE_ONLINE`/SUCCESS with the duration, cancel id 1005, post a silent event, and converge (the
+  Converger is converging already; `LinkCheckWorker` and the dashboard refresh call it) so the plan is
+  re-asserted on a boiler that just got power back.
+- Reporters: Converger (state poll and command batch), `LinkCheckWorker`, dashboard pull-to-refresh.
+  Workers that give up because of `DeviceOffline` log FAILED but do not post `actionFailed`.
 
 ---
 
@@ -1024,6 +1053,10 @@ The complete table from the UX design is binding. Key list (values exactly as be
 | notif_manual_change | Ručna promena na bojleru — važi do %1$s |
 | notif_hbt_late | Kasni start grejanja — voda možda neće stići do cilja (%1$d °C manjka) |
 | notif_alarms_off | Tačni alarmi su isključeni — raspored neće raditi. |
+| notif_device_offline_title | Bojler je van mreže |
+| notif_device_offline | Bojler se ne javlja od %1$s — verovatno je isključen iz struje. Proveri prekidač. |
+| notif_device_online | Bojler je ponovo na vezi (bio van mreže %1$s) |
+| btn_check_again | Proveri ponovo |
 | unit_c | °C |
 
 (ui module may add layout-only strings; all user-visible text MUST be in `strings.xml`, Serbian latinica.)
@@ -1044,6 +1077,8 @@ class App : android.app.Application(), androidx.work.Configuration.Provider {
         container = rs.novica.dobarboiler.di.AppContainer(this)
         rs.novica.dobarboiler.notifications.Channels.ensure(this)
         container.enqueueWatchdog()   // periodic 6 h, KEEP
+        container.enqueueServerSync() // periodic 1 h, KEEP
+        container.enqueueLinkCheck()  // periodic 15 min, KEEP (§7.5)
     }
     override val workManagerConfiguration: androidx.work.Configuration
         get() = androidx.work.Configuration.Builder().build()
@@ -1069,8 +1104,11 @@ class AppContainer(app: android.app.Application) {
     val engine: rs.novica.dobarboiler.domain.SchedulerEngine         // DefaultSchedulerEngine(zone)
     val alarmScheduler: rs.novica.dobarboiler.scheduling.AlarmScheduler
     val notifier: rs.novica.dobarboiler.notifications.Notifier
+    val linkMonitor: rs.novica.dobarboiler.scheduling.DeviceLinkMonitor   // §7.5
     val converger: rs.novica.dobarboiler.scheduling.Converger
     fun enqueueWatchdog()
+    fun enqueueServerSync()
+    fun enqueueLinkCheck()
 }
 ```
 

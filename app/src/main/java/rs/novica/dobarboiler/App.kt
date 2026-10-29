@@ -23,6 +23,7 @@ class App : Application(), Configuration.Provider {
         Channels.ensure(this)
         container.enqueueWatchdog() // periodic 6 h, unique "watchdog", KEEP
         container.enqueueServerSync() // periodic 1 h, unique "server_sync_periodic", KEEP
+        container.enqueueLinkCheck() // periodic 15 min, unique "link_check", KEEP
     }
 
     override val workManagerConfiguration: Configuration

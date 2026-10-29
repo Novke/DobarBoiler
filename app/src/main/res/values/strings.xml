@@ -59,6 +59,7 @@
     <string name="btn_start">Pokreni</string>
     <string name="btn_cancel">Otkaži</string>
     <string name="btn_fix">Popravi</string>
+    <string name="btn_check_again">Proveri ponovo</string>
     <string name="btn_apply">Primeni</string>
 
     <!-- Vacation -->
@@ -189,6 +190,9 @@
     <string name="notif_vacation_resumed">Bojler ponovo uključen (kraj odmora)</string>
     <string name="notif_manual_change">Ručna promena na bojleru — važi do %1$s</string>
     <string name="notif_hbt_late">Kasni start grejanja — voda možda neće stići do cilja (%1$d °C manjka)</string>
+    <string name="notif_device_offline_title">Bojler je van mreže</string>
+    <string name="notif_device_offline">Bojler se ne javlja od %1$s — verovatno je isključen iz struje. Proveri prekidač.</string>
+    <string name="notif_device_online">Bojler je ponovo na vezi (bio van mreže %1$s)</string>
     <string name="notif_alarms_off">Tačni alarmi su isključeni — raspored neće raditi.</string>
 
     <!-- Misc -->

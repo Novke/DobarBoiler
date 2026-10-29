@@ -296,6 +296,41 @@ class AristonHttpClientTest {
     }
 
     @Test
+    fun `M2M 404 from the gateway throws DeviceOffline without retry`() = runBlocking {
+        creds.storeToken("tok")
+        // Verbatim body the cloud returned for the whole 2026-10-27..29 power outage.
+        server.enqueue(
+            MockResponse().setResponseCode(500).setBody(
+                "\":-( M2M platform error from 80646F26422C (Http status: 404 - Not Found) (FailureId: 170711215454)\"",
+            ),
+        )
+
+        try {
+            client.getState("80646F26422C")
+            fail("expected DeviceOffline")
+        } catch (e: AristonException.DeviceOffline) {
+            assertTrue(e.message!!.contains("M2M"))
+        }
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `M2M error with another inner status stays Transient`() = runBlocking {
+        creds.storeToken("tok")
+        val body = "\":-( M2M platform error from 80646F26422C (Http status: 408 - Request Timeout)\""
+        server.enqueue(MockResponse().setResponseCode(500).setBody(body))
+        server.enqueue(MockResponse().setResponseCode(500).setBody(body))
+
+        try {
+            client.getState("80646F26422C")
+            fail("expected Transient")
+        } catch (e: AristonException.Transient) {
+            // expected
+        }
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
     fun `no credentials and no token throws AuthFailed without network calls`() = runBlocking {
         val noCreds = FakeCredentialProvider(email = null, password = null)
         val c = AristonHttpClient(

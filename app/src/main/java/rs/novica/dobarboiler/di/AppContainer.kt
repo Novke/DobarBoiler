@@ -31,6 +31,8 @@ import rs.novica.dobarboiler.domain.SchedulerEngine
 import rs.novica.dobarboiler.notifications.Notifier
 import rs.novica.dobarboiler.scheduling.AlarmScheduler
 import rs.novica.dobarboiler.scheduling.Converger
+import rs.novica.dobarboiler.scheduling.DeviceLinkMonitor
+import rs.novica.dobarboiler.scheduling.LinkCheckWorker
 import rs.novica.dobarboiler.scheduling.WatchdogWorker
 
 /**
@@ -103,6 +105,10 @@ class AppContainer(private val app: Application) {
 
     val notifier: Notifier by lazy { Notifier(app) }
 
+    val linkMonitor: DeviceLinkMonitor by lazy {
+        DeviceLinkMonitor(context = app, settings = settings, log = actionLog, notifier = notifier, clock = clock)
+    }
+
     val converger: Converger by lazy {
         Converger(
             engine = engine,
@@ -113,9 +119,13 @@ class AppContainer(private val app: Application) {
             log = actionLog,
             alarms = alarmScheduler,
             notifier = notifier,
+            link = linkMonitor,
             clock = clock,
         )
     }
+
+    /** Boiler reachability check every 15 min, unique "link_check", KEEP (SPEC §7.5). */
+    fun enqueueLinkCheck() = LinkCheckWorker.enqueuePeriodic(app)
 
     /** Hourly history-server upload, unique "server_sync_periodic", KEEP. */
     fun enqueueServerSync() = ServerSyncWorker.enqueuePeriodic(app)
