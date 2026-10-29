@@ -110,6 +110,10 @@ fun DashboardScreen(
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                state.deviceOfflineSinceLabel?.let { since ->
+                    DeviceOfflineCard(sinceLabel = since, onRetry = vm::refresh)
+                    Spacer(Modifier.height(16.dp))
+                }
                 if (state.healthIssues.isNotEmpty()) {
                     PermissionsHealthCard(issues = state.healthIssues, onFix = onOpenHealth)
                     Spacer(Modifier.height(16.dp))
@@ -405,6 +409,32 @@ fun PermissionsHealthCard(issues: List<HealthIssue>, onFix: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onFix) { Text(stringResource(R.string.btn_fix)) }
+        }
+    }
+}
+
+/** SPEC §7.5 — the cloud cannot reach the boiler; almost always its power switch. */
+@Composable
+fun DeviceOfflineCard(sinceLabel: String, onRetry: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                stringResource(R.string.notif_device_offline_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.notif_device_offline, sinceLabel),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.btn_check_again)) }
         }
     }
 }

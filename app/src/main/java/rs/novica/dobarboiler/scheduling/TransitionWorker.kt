@@ -12,6 +12,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import java.time.Duration
 import rs.novica.dobarboiler.App
+import rs.novica.dobarboiler.api.AristonException
 
 /**
  * Runs the convergence routine when a transition alarm fires (SPEC §6.4).
@@ -54,7 +55,8 @@ class TransitionWorker(
             outcome = LogOutcomes.FAILED,
             attempt = runAttemptCount + 1,
         )
-        container.notifier.actionFailed(detail)
+        // A powerless boiler already has its own ongoing alert (§7.5); don't stack a second one.
+        if (error !is AristonException.DeviceOffline) container.notifier.actionFailed(detail)
 
         // Window-end OFF failure → keep trying every 30 min until success or supersession.
         val desiredOff = runCatching {

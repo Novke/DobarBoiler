@@ -31,8 +31,10 @@ class Notifier(private val context: Context) {
         const val ID_PERMISSION_PROBLEM = 1002
         const val ID_AUTH_FAILED = 1003
         const val ID_HBT_LATE = 1004
+        const val ID_DEVICE_OFFLINE = 1005
         const val ID_MANUAL_CHANGE = 2001
         const val ID_SCHEDULED_EVENT = 2002
+        const val ID_DEVICE_ONLINE = 2003
         const val ID_BOOST_ONGOING = 3001
         const val ID_BOOST_DONE = 3002
         const val ID_BOOST_TIMEOUT = 3003
@@ -52,6 +54,9 @@ class Notifier(private val context: Context) {
          * since the timeout fires exactly at `boostMaxDuration`.
          */
         private const val MAX_DURATION_LABEL = "maksimalnog trajanja"
+
+        /** Accent for the offline alert (Material red 700). */
+        private const val OFFLINE_RED = 0xFFD32F2F.toInt()
     }
 
     // ---------------------------------------------------------------------------------------
@@ -101,6 +106,29 @@ class Notifier(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_ERROR)
             .build()
         post(ID_HBT_LATE, notification)
+    }
+
+    /**
+     * The boiler's gateway is unreachable — almost always a tripped power switch (SPEC §7.5).
+     * Ongoing and not auto-cancelled, so "Obriši sve" leaves it alone; re-posted on every
+     * offline observation (≤ 15 min apart), so it comes back if swiped away (Android 14+
+     * lets the user swipe ongoing notifications). Alerts only when it is not already shown.
+     * Removed by [deviceOnline].
+     */
+    fun deviceOffline(sinceLabel: String) {
+        val text = context.getString(R.string.notif_device_offline, sinceLabel)
+        val notification = builder(Channels.ERRORS, ID_DEVICE_OFFLINE, openHistory = false)
+            .setContentTitle(context.getString(R.string.notif_device_offline_title))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setColor(OFFLINE_RED)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
+            .build()
+        post(ID_DEVICE_OFFLINE, notification)
     }
 
     // ---------------------------------------------------------------------------------------
@@ -182,6 +210,17 @@ class Notifier(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()
         post(ID_BOOST_TIMEOUT, notification)
+    }
+
+    /** The boiler answers again: drop the offline alert and leave a silent note. */
+    fun deviceOnline(outageLabel: String) {
+        NotificationManagerCompat.from(context).cancel(ID_DEVICE_OFFLINE)
+        val text = context.getString(R.string.notif_device_online, outageLabel)
+        val notification = builder(Channels.EVENTS, ID_DEVICE_ONLINE, openHistory = false)
+            .setContentText(text)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .build()
+        post(ID_DEVICE_ONLINE, notification)
     }
 
     /** Removes the ongoing boost notification (service death / cancel paths). */

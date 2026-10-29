@@ -49,6 +49,7 @@ object LogKinds {
     const val OVERRIDE_EXPIRED = "OVERRIDE_EXPIRED"; const val MANUAL_CHANGE = "MANUAL_CHANGE_DETECTED"
     const val REASSERT = "REASSERT"; const val VERIFY = "VERIFY_POLL"; const val COMMAND_FAILED = "COMMAND_FAILED"
     const val DRIFT = "DRIFT_CORRECTED"; const val CONVERGE = "CONVERGE"
+    const val DEVICE_OFFLINE = "DEVICE_OFFLINE"; const val DEVICE_ONLINE = "DEVICE_ONLINE" // §7.5
 }
 
 /** `action_log.trig` values (SPEC §6.2 — frozen). */
@@ -122,6 +123,7 @@ class Converger(
     private val log: ActionLogRepository,
     private val alarms: AlarmScheduler,
     private val notifier: Notifier,
+    private val link: DeviceLinkMonitor,
     private val clock: Clock,
 ) {
 
@@ -167,8 +169,10 @@ class Converger(
         val snapshot: DeviceSnapshot? = if (pollFresh) {
             try {
                 device.refresh(Duration.ofSeconds(30))
+                    .also { link.reportOnline(trigger, it.at) }
             } catch (e: Exception) {
                 if (e is AristonException.AuthFailed) notifier.authFailed()
+                if (e is AristonException.DeviceOffline) link.reportOffline(trigger)
                 log.log(
                     kind = LogKinds.COMMAND_FAILED, trig = trigger,
                     detail = "Upit stanja nije uspeo: ${e.message ?: e.javaClass.simpleName}",
@@ -233,6 +237,7 @@ class Converger(
                     // of misclassifying our own half-applied state as an external manual change.
                     settings.updateRuntime { it.copy(lastAppliedStateJson = null, lastAppliedAt = null) }
                     if (e is AristonException.AuthFailed) notifier.authFailed()
+                    if (e is AristonException.DeviceOffline) link.reportOffline(trigger)
                     log.log(
                         kind = LogKinds.COMMAND_FAILED, trig = trigger,
                         detail = "Slanje ${cmds.size} komandi nije uspelo: ${e.message ?: e.javaClass.simpleName}",

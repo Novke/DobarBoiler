@@ -88,6 +88,9 @@ Key rules that are easy to break:
 - Alarms: `setExactAndAllowWhileIdle` only, fixed request codes so re-arming replaces. `AlarmReceiver` does zero
   I/O and only enqueues expedited WorkManager jobs; retries are WorkManager backoff (7 attempts), plus an extra
   30 min chain when a window-end OFF fails (that one costs money).
+- **Boiler without power** (its switch trips): the cloud answers `500 "M2M platform error … (Http status: 404)"`,
+  mapped to `AristonException.DeviceOffline`. `DeviceLinkMonitor` + `LinkCheckWorker` (15 min) turn it into an
+  ongoing "Bojler je van mreže" alert after 3 min and clear it on the first fresh read (SPEC §7.5).
 - Window times are `LocalTime` converted per date in the configured zone (default `Europe/Belgrade`; DST gap →
   first valid instant, overlap → earlier offset). HBT, vacation and boost use `Instant`.
 

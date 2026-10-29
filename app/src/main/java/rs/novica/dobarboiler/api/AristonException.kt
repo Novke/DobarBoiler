@@ -15,6 +15,13 @@ sealed class AristonException(message: String, cause: Throwable? = null) : Excep
     /** 5xx / timeout / IO error that persisted after the single 5 s retry. */
     class Transient(message: String, cause: Throwable? = null) : AristonException(message, cause)
 
+    /**
+     * The cloud answered 5xx with "M2M platform error … (Http status: 404 …)": it cannot reach
+     * the boiler's Wi-Fi gateway — in practice the boiler lost power. Not retried; a 5 s retry
+     * cannot bring the gateway back (SPEC §7.5).
+     */
+    class DeviceOffline(message: String) : AristonException(message)
+
     /** HTTP 404 — callers usually map to null / "no data". */
     class NotFound : AristonException("404")
 }

@@ -28,9 +28,11 @@ import java.util.concurrent.TimeUnit
  *  2. 405 → re-login once, replace token, retry the original request once. Second 405 → [AristonException.AuthFailed].
  *  3. 404 → [AristonException.NotFound].
  *  4. 429 → [AristonException.RateLimited] immediately, no retry.
- *  5. Any other non-2xx or IOException → sleep 5 s, retry once → [AristonException.Transient].
- *  6. 2xx with empty body → success; with body → decode with `Json { ignoreUnknownKeys = true }`.
- *  7. A [Mutex] serializes login so concurrent 405s don't stampede.
+ *  5. 5xx whose body is the cloud's "M2M platform error … 404" → [AristonException.DeviceOffline]
+ *     immediately (the boiler's gateway is unreachable; retrying in 5 s is pointless).
+ *  6. Any other non-2xx or IOException → sleep 5 s, retry once → [AristonException.Transient].
+ *  7. 2xx with empty body → success; with body → decode with `Json { ignoreUnknownKeys = true }`.
+ *  8. A [Mutex] serializes login so concurrent 405s don't stampede.
  *
  * Max ONE retry per request, of either kind (auth-refresh or 5 s sleep), matching the
  * reference implementation.
@@ -166,6 +168,8 @@ class AristonHttpClient(
                     resp.code == 404 -> throw AristonException.NotFound()
                     resp.code == 429 ->
                         throw AristonException.RateLimited(text.ifBlank { "HTTP 429" })
+                    resp.code in 500..599 && isGatewayOffline(text) ->
+                        throw AristonException.DeviceOffline(text.trim('"', ' ').take(200))
                     else -> {
                         if (retried) {
                             throw AristonException.Transient("HTTP ${resp.code}: ${text.take(200)}")
@@ -258,6 +262,14 @@ class AristonHttpClient(
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * `":-( M2M platform error from <gw> (Http status: 404 - Not Found) (FailureId: …)"` —
+     * observed for every call while the boiler was without power (2026-10-27..29).
+     * Other inner statuses (timeouts etc.) stay ordinary transient errors.
+     */
+    private fun isGatewayOffline(body: String): Boolean =
+        body.contains("M2M platform error") && body.contains("Http status: 404")
 
     private suspend fun postPlantSetting(gwId: String, key: String, change: SettingChange) {
         val bodyText = json.encodeToString(

@@ -9,9 +9,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import rs.novica.dobarboiler.api.AristonException
 import rs.novica.dobarboiler.di.AppContainer
+import rs.novica.dobarboiler.domain.DeviceLink
 import rs.novica.dobarboiler.domain.DeviceSnapshot
 import rs.novica.dobarboiler.domain.StateSource
+import rs.novica.dobarboiler.scheduling.Triggers
 import rs.novica.dobarboiler.ui.common.ContainerViewModel
 import rs.novica.dobarboiler.ui.common.Fmt
 import rs.novica.dobarboiler.ui.common.HealthIssue
@@ -34,6 +37,8 @@ data class DashboardUiState(
     /** Upcoming window (start, end) labels for "Sledeće: grejanje X–Y", when known. */
     val nextWindowLabels: Pair<String, String>? = null,
     val healthIssues: List<HealthIssue> = emptyList(),
+    /** "15:53" / "27.10. 15:53" while a confirmed outage is on (SPEC §7.5), else null. */
+    val deviceOfflineSinceLabel: String? = null,
     val isRefreshing: Boolean = false,
     val manualHold: Boolean = false,
     val manualHoldUntilLabel: String? = null,
@@ -92,6 +97,12 @@ class DashboardViewModel(app: Application, container: AppContainer) :
                         lastCloudContactAt = runtime.lastCloudContactAt,
                         now = now,
                     ),
+                    deviceOfflineSinceLabel = runtime.deviceOfflineSince
+                        ?.takeIf { Duration.between(it, now) >= DeviceLink.CONFIRM_AFTER }
+                        ?.let { since ->
+                            if (since.atZone(zone).toLocalDate() == now.atZone(zone).toLocalDate()) Fmt.time(since, zone)
+                            else Fmt.dateTime(since, zone)
+                        },
                     manualHold = manualHoldUntil != null,
                     manualHoldUntilLabel = manualHoldUntil?.let { u -> Fmt.time(u, zone) },
                     boostActive = inputs.boost != null,
@@ -111,7 +122,13 @@ class DashboardViewModel(app: Application, container: AppContainer) :
         _state.update { it.copy(isRefreshing = true) }
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                container.deviceRepository.refresh()
+                val snapshot = container.deviceRepository.refresh()
+                // Pull-to-refresh right after flipping the switch back on clears the alert.
+                if (container.linkMonitor.reportOnline(Triggers.USER, snapshot.at)) {
+                    convergeUser()
+                }
+            } catch (_: AristonException.DeviceOffline) {
+                container.linkMonitor.reportOffline(Triggers.USER) // the offline card says it all
             } catch (t: Throwable) {
                 emitError(t)
             }

@@ -41,6 +41,7 @@ data class RuntimeState(
     val lastAppliedAt: Instant?,
     val manualHoldUntil: Instant?,           // SPEC §7.4
     val lastCloudContactAt: Instant?,
+    val deviceOfflineSince: Instant? = null, // SPEC §7.5 — first M2M 404 of the current outage
 )
 
 /** Process-wide singleton DataStore for the "settings" file. */
@@ -142,6 +143,7 @@ class SettingsStore(context: Context) : SyncStateStore {
         val RT_LAST_APPLIED_AT = longPreferencesKey("rt_last_applied_at")
         val RT_MANUAL_HOLD_UNTIL = longPreferencesKey("rt_manual_hold_until")
         val RT_LAST_CLOUD_CONTACT_AT = longPreferencesKey("rt_last_cloud_contact_at")
+        val RT_DEVICE_OFFLINE_SINCE = longPreferencesKey("rt_device_offline_since")
         val SYNC_INSTALL_ID = stringPreferencesKey("rt_install_id")
         val SYNC_LAST_ACTION_ID = longPreferencesKey("rt_last_uploaded_action_id")
         val SYNC_INTENT_JSON = stringPreferencesKey("rt_last_intent_json")
@@ -247,6 +249,7 @@ class SettingsStore(context: Context) : SyncStateStore {
         lastAppliedAt = this[K.RT_LAST_APPLIED_AT]?.let(Instant::ofEpochMilli),
         manualHoldUntil = this[K.RT_MANUAL_HOLD_UNTIL]?.let(Instant::ofEpochMilli),
         lastCloudContactAt = this[K.RT_LAST_CLOUD_CONTACT_AT]?.let(Instant::ofEpochMilli),
+        deviceOfflineSince = this[K.RT_DEVICE_OFFLINE_SINCE]?.let(Instant::ofEpochMilli),
     )
 
     private fun MutablePreferences.write(r: RuntimeState) {
@@ -256,6 +259,7 @@ class SettingsStore(context: Context) : SyncStateStore {
         setOrRemove(K.RT_LAST_APPLIED_AT, r.lastAppliedAt?.toEpochMilli())
         setOrRemove(K.RT_MANUAL_HOLD_UNTIL, r.manualHoldUntil?.toEpochMilli())
         setOrRemove(K.RT_LAST_CLOUD_CONTACT_AT, r.lastCloudContactAt?.toEpochMilli())
+        setOrRemove(K.RT_DEVICE_OFFLINE_SINCE, r.deviceOfflineSince?.toEpochMilli())
     }
 
     private fun Preferences.toSyncState(): SyncState = SyncState(

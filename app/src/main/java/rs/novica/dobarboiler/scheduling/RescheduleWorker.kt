@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import rs.novica.dobarboiler.App
+import rs.novica.dobarboiler.api.AristonException
 
 /**
  * Full re-convergence after boot, app update, wall-clock/timezone change or exact-alarm
@@ -30,7 +31,8 @@ class RescheduleWorker(
                     outcome = LogOutcomes.FAILED,
                     attempt = runAttemptCount + 1,
                 )
-                container.notifier.actionFailed(detail)
+                // A powerless boiler already has its own ongoing alert (§7.5).
+                if (outcome.error !is AristonException.DeviceOffline) container.notifier.actionFailed(detail)
                 Result.failure()
             }
         }

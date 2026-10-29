@@ -7,6 +7,7 @@ import java.time.Duration
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
 import rs.novica.dobarboiler.App
+import rs.novica.dobarboiler.api.AristonException
 
 /**
  * Alarm-backed boost backstop (SPEC §6.4/R4): completes an overrun boost even if
@@ -58,7 +59,8 @@ class BoostTimeoutWorker(
                     outcome = LogOutcomes.FAILED,
                     attempt = runAttemptCount + 1,
                 )
-                container.notifier.actionFailed(detail)
+                // A powerless boiler already has its own ongoing alert (§7.5).
+                if (outcome.error !is AristonException.DeviceOffline) container.notifier.actionFailed(detail)
                 Result.failure()
             }
         }
