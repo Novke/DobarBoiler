@@ -72,7 +72,7 @@ cert="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | sed -n 's/^Signer
 [[ "$cert" == "$CERT_SHA256" ]] \
     || die "APK je potpisan pogrešnim ključem ($cert); telefon ga ne bi primio kao update"
 
-badging="$("$BUILD_TOOLS/aapt2" dump badging "$APK" | head -1)"
+badging="$("$BUILD_TOOLS/aapt2" dump badging "$APK" | sed -n 1p)"
 VCODE="$(sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" <<<"$badging")"
 VNAME="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<<"$badging")"
 [[ -n "$VCODE" && -n "$VNAME" ]] || die "ne mogu da pročitam verziju iz APK-a"
