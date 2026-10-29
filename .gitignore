@@ -37,3 +37,6 @@ __pycache__/
 Thumbs.db
 Desktop.ini
 .superpowers/
+
+# --- GitGud per-machine run values ---
+.gitgud/run.local.json

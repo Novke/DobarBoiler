@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "configs": [
+    {
+      "id": "izdaj-apk",
+      "name": "Izdaj APK",
+      "type": "shell",
+      "workingDir": "",
+      "command": "bash tools/release-apk.sh --ref \"$REF\"",
+      "env": { "REF": "origin/master" }
+    }
+  ]
+}
