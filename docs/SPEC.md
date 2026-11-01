@@ -658,7 +658,7 @@ class Notifier(private val context: android.content.Context) {
     fun hbtLate(shortfallC: Int)                                      // ERRORS, id 1004
     fun deviceOffline(sinceLabel: String)                             // ERRORS, id 1005, ongoing, only-alert-once (§7.5)
     fun deviceOnline(outageLabel: String)                             // cancels 1005; EVENTS, id 2003
-    fun boostOngoing(currentTemp: Double, target: Int, etaMinutes: Long?): android.app.Notification // FGS notif, id 3001
+    fun boostOngoing(currentTemp: Double, target: Int, etaMinutes: Long?, cancelIntent: android.app.PendingIntent? = null): android.app.Notification // FGS notif, id 3001, action "Prekini boost"
     fun boostDone(target: Int)                                        // BOOST, id 3002
     fun boostTimeout(currentTemp: Double)                             // BOOST, id 3003
     fun cancelBoost()
@@ -753,12 +753,16 @@ class Converger(
    snapshot contradicts it (`on`, `reqTemp` (±0.5), or `eco` differ) and `snapshot.at > lastAppliedAt + 3 min`
    (grace for slow bus) and no command was sent since: this is external. Policy RESPECT → set
    `manualHoldUntil = res.nextTransition?.at`, log MANUAL_CHANGE, notify, **skip step 5**. Policy REASSERT →
-   proceed (log REASSERT). A transition-alarm trigger (`Triggers.ALARM`) always **clears `manualHoldUntil`
-   first** — scheduled transitions outrank manual holds by definition.
+   proceed (log REASSERT). An assertive trigger (`Triggers.ALARM`, `Triggers.BOOST`) always **clears
+   `manualHoldUntil` first and skips this detection** — scheduled transitions and boost start/end outrank
+   manual holds by definition. (Running detection there compared against the stale baseline, re-detected the
+   same change and re-armed the hold at every transition: boost switched off by hand on 2026-10-29 left the
+   boiler off for the following nights.) Rules live in `scheduling/ManualChangeRules`.
 5. If `manualHoldUntil != null && now < manualHoldUntil` → skip commands. Else
    `cmds = engine.plan(res.desired, snapshot)`; if non-empty → `device.execute(gwId, cmds)`, update
    `lastAppliedState/At`, log (kind chosen from `res.source` + transition reason), enqueue `VerifyWorker`
-   (delay 90 s).
+   (delay 90 s). If empty (the device already matches) and a snapshot exists → `lastAppliedState/At` become
+   the desired state, so an old baseline never reads as a manual change later.
 6. Persist `nextTransitionAt/Reason`; `alarms.armTransition(res.nextTransition.at)` (or cancel if null).
    If `config.maintainMode is Band` and desired is a WEEKLY_PLAN/DAY_OVERRIDE "on" state → also
    `armBandTick(now + band.pollEvery)`, else `cancelBandTick()`.
@@ -817,7 +821,11 @@ Flow: `startBoost` row (timeout = now + `boostMaxDuration`) → `armBoostTimeout
 `rmTm` shown when plausible). Completion when `temp >= target - 0.5` OR
 (`!heatReq && reqTemp >= target && temp >= target - 2`): `completeBoost(DONE)` → `converge(Triggers.BOOST)`
 (reverts to planner state) → `boostDone` notification → `cancelBoostTimeout()` → `stopSelf()`.
-User cancel → `completeBoost(CANCELLED)` → same revert path. Starting a boost while active = cancel-then-start.
+User cancel ("Prekini boost" in the boost sheet or the action on notification 3001) → `completeBoost(CANCELLED)`
+→ same revert path. Boiler switched off by hand during a boost (snapshot `on=false` later than
+`lastAppliedAt + 3 min`) → `completeBoost(CANCELLED)` → `converge(Triggers.VERIFY, pollFresh = false)`, which
+detects the manual change and holds it until the next transition (the boiler stays off, the plan resumes at
+the next transition). Starting a boost while active = cancel-then-start.
 Manifest: `foregroundServiceType="specialUse"` + property `PROPERTY_SPECIAL_USE_FGS_SUBTYPE =
 "boiler-boost-temperature-monitor"`. (`dataSync` rejected: 6 h/24 h caps, wrong semantics.)
 
@@ -871,8 +879,9 @@ beyond the single armed alarm). DST gap → first instant after gap; overlap →
 
 Default `RESPECT_UNTIL_NEXT_TRANSITION` via `manualHoldUntil` (§6.2 step 4). Detected only opportunistically
 (verify polls, mid-window/band polls, boost polls, app-open refresh) — simple mode does not poll all night.
-Dashboard shows "Ručna promena — važi do %s" + button "Vrati na plan" (clears the hold, converges with
-`Triggers.USER`). `REASSERT` policy re-applies desired state on detection.
+Dashboard shows "Ručna promena — važi do %s" + button "Vrati na plan" (clears the hold and the
+`lastAppliedState*` baseline, converges with `Triggers.USER`; without clearing the baseline the USER pass
+re-detected the same change and re-armed the hold). `REASSERT` policy re-applies desired state on detection.
 
 ### 7.5 Boiler without power (offline alert)
 

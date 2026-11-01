@@ -152,7 +152,8 @@ class Converger(
         // Scheduled transitions outrank manual holds by definition (§7.4). Boost start/end
         // are explicit app-driven transitions and must assert the same way — otherwise a
         // mid-boost hold would silently block the boost revert (boiler left ON for hours).
-        if ((trigger == Triggers.ALARM || trigger == Triggers.BOOST) && preRuntime.manualHoldUntil != null) {
+        val assertive = ManualChangeRules.isAssertive(trigger)
+        if (assertive && preRuntime.manualHoldUntil != null) {
             settings.updateRuntime { it.copy(manualHoldUntil = null) }
         }
 
@@ -192,13 +193,11 @@ class Converger(
         var skipCommands = runtime.manualHoldUntil?.let { now.isBefore(it) } == true
         var manualDetectedNow = false
 
-        // 4. Manual-change detection (§7.4).
-        if (!skipCommands) {
+        // 4. Manual-change detection (§7.4). Never on an assertive trigger: it would re-detect
+        // the change the hold was for and re-arm the hold at every transition.
+        if (!skipCommands && !assertive) {
             val applied = AppliedStateCodec.decode(runtime.lastAppliedStateJson)
-            val appliedAt = runtime.lastAppliedAt
-            val isExternal = applied != null && appliedAt != null && snapshot != null &&
-                snapshot.at.isAfter(appliedAt.plus(MANUAL_GRACE)) &&
-                !AppliedStateCodec.matches(applied, snapshot)
+            val isExternal = ManualChangeRules.isExternal(applied, runtime.lastAppliedAt, snapshot)
             if (isExternal) {
                 when (inputs.config.manualChangePolicy) {
                     ManualChangePolicy.RESPECT_UNTIL_NEXT_TRANSITION -> {
@@ -260,6 +259,13 @@ class Converger(
                 notifyScheduledEvent(trigger, res, firedReason, now)
                 checkHbtLateStart(now, inputs, res, snapshot, trigger)
                 if (trigger != Triggers.VERIFY) enqueueVerify()
+            } else if (snapshot != null) {
+                // The device already matches the plan: that is the new baseline. An older one
+                // (e.g. the boost's "on") would read as a manual change on the next poll.
+                val appliedJson = AppliedStateCodec.encode(res.desired)
+                if (runtime.lastAppliedStateJson != appliedJson) {
+                    settings.updateRuntime { it.copy(lastAppliedStateJson = appliedJson, lastAppliedAt = now) }
+                }
             }
 
             // §6.6 — anti-legionella hygiene cycle on return from a >7-day vacation.
@@ -471,9 +477,6 @@ class Converger(
     }
 
     private companion object {
-        /** Grace for the slow device bus before a differing snapshot counts as external (§6.2 step 4). */
-        val MANUAL_GRACE: Duration = Duration.ofMinutes(3)
-
         /** Don't bother arming a mid-window check closer than this to `now`. */
         val MIN_MID_WINDOW_LEAD: Duration = Duration.ofMinutes(15)
     }

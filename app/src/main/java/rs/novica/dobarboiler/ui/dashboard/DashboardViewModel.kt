@@ -137,11 +137,16 @@ class DashboardViewModel(app: Application, container: AppContainer) :
         }
     }
 
-    /** "Vrati na plan": clears the manual hold, then converges with the USER trigger. */
+    /**
+     * "Vrati na plan": clears the manual hold and the baseline it contradicted (otherwise the
+     * USER pass re-detects the same change and re-arms the hold), then converges.
+     */
     fun returnToPlan() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                container.settings.updateRuntime { it.copy(manualHoldUntil = null) }
+                container.settings.updateRuntime {
+                    it.copy(manualHoldUntil = null, lastAppliedStateJson = null, lastAppliedAt = null)
+                }
             } catch (t: Throwable) {
                 emitError(t)
                 return@launch
