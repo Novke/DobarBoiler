@@ -69,6 +69,7 @@ import rs.novica.dobarboiler.ui.common.TempStepper
 import rs.novica.dobarboiler.ui.common.containerViewModel
 import rs.novica.dobarboiler.ui.common.labelRes
 import rs.novica.dobarboiler.ui.common.sourceText
+import rs.novica.dobarboiler.ui.settings.UpdateBanner
 import kotlin.math.roundToInt
 
 /**
@@ -118,6 +119,7 @@ fun DashboardScreen(
                     PermissionsHealthCard(issues = state.healthIssues, onFix = onOpenHealth)
                     Spacer(Modifier.height(16.dp))
                 }
+                UpdateBanner(modifier = Modifier.padding(bottom = 16.dp))
 
                 TempDialSection(snapshot = state.snapshot, boostActive = state.boostActive)
 

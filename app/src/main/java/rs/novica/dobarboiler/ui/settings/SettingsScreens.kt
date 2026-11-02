@@ -282,7 +282,10 @@ fun SettingsRootScreen(
     onOpenHistory: () -> Unit,
     onOpenOverrides: () -> Unit,
     onOpenServer: () -> Unit,
+    onOpenVersions: () -> Unit,
 ) {
+    val updateVm = containerViewModel(key = "update") { app, container -> UpdateViewModel(app, container) }
+    val updateState by updateVm.state.collectAsState()
     val serverVm = containerViewModel { app, container -> ServerSettingsViewModel(app, container) }
     val serverStatusNow by serverVm.status.collectAsState()
     Scaffold(
@@ -301,9 +304,12 @@ fun SettingsRootScreen(
             SettingsNavItem(stringResource(R.string.set_health), onOpenHealth)
             SettingsNavItem(stringResource(R.string.srv_title), onOpenServer, serverStatusLabel(serverStatusNow))
             SettingsNavItem(stringResource(R.string.set_account), onOpenAccount)
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.set_version)) },
-                supportingContent = { Text(BuildConfig.VERSION_NAME) },
+            SettingsNavItem(
+                stringResource(R.string.set_version),
+                onOpenVersions,
+                updateState.offeredRelease()
+                    ?.let { stringResource(R.string.set_version_available, BuildConfig.VERSION_NAME, it.version) }
+                    ?: BuildConfig.VERSION_NAME,
             )
         }
     }

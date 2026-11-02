@@ -46,10 +46,19 @@ Live API smoke test (Python reference library `ariston`, use a venv — PEP 668)
 
 No lint config, no instrumented tests, no CI.
 
-Release to the phone: `bash tools/release-apk.sh` (origin/master, tests, then `http://novica-dev/boiler-apk/`;
-GitGud button **Izdaj APK**). APKs must be signed with the stable key `/data/keys/dobarboiler/signing.keystore`
-(configured in `~/.gradle/gradle.properties`), or the phone refuses them as an update; versions come from git.
-Details and key restore: `docs/release.md`.
+## Releases (read `docs/release.md` before touching them)
+
+- **Only Novica releases.** Never run `tools/release-apk.sh` without `--preview` (nor GitGud's **Izdaj APK**)
+  unless Novica explicitly asked for a release in the current conversation. A merged PR, a finished task or
+  green tests are not a request; do not offer it as the "logical next step" either beyond one sentence.
+  `bash tools/release-apk.sh --preview` (next version + changelog, publishes nothing) is always allowed.
+- **Every PR description carries a release block** that you choose without asking: `Release: major|minor|patch|none`
+  plus 1–3 Serbian, user-facing `- ` changelog bullets (`major` only when Novica says so; rubric in
+  `docs/release.md`). A release takes the biggest step since the last `vX.Y.Z` tag; tags are the only source of
+  truth, never create or move one by hand and never write a version number into the code.
+- After a release the phone offers the update itself (dashboard card **Ažuriraj**, Podešavanja → Verzije).
+  APKs must be signed with the stable key `/data/keys/dobarboiler/signing.keystore` (configured in
+  `~/.gradle/gradle.properties`), or the phone refuses them as an update. Details and key restore: `docs/release.md`.
 
 ## Where the truth lives
 

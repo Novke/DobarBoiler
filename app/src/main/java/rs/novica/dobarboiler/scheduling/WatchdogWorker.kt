@@ -44,6 +44,15 @@ class WatchdogWorker(
             )
         }
 
+        // New app version published? One notification per version (the dashboard shows the button).
+        runCatching {
+            container.updater.check(force = true)?.let { release ->
+                if (container.settings.markUpdateNotified(release.versionCode)) {
+                    container.notifier.updateAvailable(release.version, release.changelog.firstOrNull()?.text)
+                }
+            }
+        }
+
         runCatching { container.actionLog.prune(olderThanDays = 90) }
         // SPEC §4.2/§6.4 — hard-delete expired day_override / heat_by_time rows and trim
         // rate samples; scheduleInputs only soft-marks them, so this is the only deleter.

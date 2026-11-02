@@ -35,6 +35,7 @@ class Notifier(private val context: Context) {
         const val ID_MANUAL_CHANGE = 2001
         const val ID_SCHEDULED_EVENT = 2002
         const val ID_DEVICE_ONLINE = 2003
+        const val ID_UPDATE_AVAILABLE = 2004
         const val ID_BOOST_ONGOING = 3001
         const val ID_BOOST_DONE = 3002
         const val ID_BOOST_TIMEOUT = 3003
@@ -231,6 +232,18 @@ class Notifier(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()
         post(ID_DEVICE_ONLINE, notification)
+    }
+
+    /** A new app version was published; tapping opens the app, whose dashboard offers "Ažuriraj". */
+    fun updateAvailable(version: String, firstChange: String?) {
+        val text = context.getString(R.string.notif_update_available, version) +
+            (firstChange?.let { "\n$it" } ?: "")
+        val notification = builder(Channels.EVENTS, ID_UPDATE_AVAILABLE, openHistory = false)
+            .setContentText(context.getString(R.string.notif_update_available, version))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .build()
+        post(ID_UPDATE_AVAILABLE, notification)
     }
 
     /** Removes the ongoing boost notification (service death / cancel paths). */
