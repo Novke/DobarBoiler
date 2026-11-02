@@ -109,6 +109,7 @@ class BoostViewModel(app: Application, container: AppContainer) :
 
     /** "Pokreni" — starts the foreground BoostService (allowed: we are foreground UI). */
     fun start() {
+        userAction("Pokreni boost do ${_state.value.targetTemp} °C")
         BoostService.start(app, _state.value.targetTemp)
     }
 
@@ -116,7 +117,7 @@ class BoostViewModel(app: Application, container: AppContainer) :
     fun cancel() {
         BoostService.cancel(app)
         // Belt-and-braces: converge back onto the planner state right away.
-        viewModelScope.launch(Dispatchers.IO) { convergeUser() }
+        convergeUser("Prekini boost (u aplikaciji)")
     }
 }
 

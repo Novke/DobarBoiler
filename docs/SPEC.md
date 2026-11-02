@@ -484,6 +484,8 @@ class CredentialStore(context: android.content.Context) : rs.novica.dobarboiler.
     var deviceName: String?
     var historyServerUrl: String?                // history server (design 2026-10-18 §5.2), e.g. http://novica-dev/boiler/
     var historyServerToken: String?              // BOILER_API_TOKEN
+    // Both fall back to data/HistoryServerDefaults: an APK built with BuildConfig.HISTORY_TOKEN (release-apk.sh,
+    // from SSM) is configured out of the box with http://novica-dev/boiler/; values typed in Settings win.
 }
 ```
 
@@ -719,6 +721,8 @@ object LogKinds {   // action_log.kind values
     const val REASSERT="REASSERT"; const val VERIFY="VERIFY_POLL"; const val COMMAND_FAILED="COMMAND_FAILED"
     const val DRIFT="DRIFT_CORRECTED"; const val CONVERGE="CONVERGE"
     const val DEVICE_OFFLINE="DEVICE_OFFLINE"; const val DEVICE_ONLINE="DEVICE_ONLINE"   // §7.5, no state_json
+    const val USER_ACTION="USER_ACTION"     // every app button that changes something: what + values; FAILED when it threw
+    const val APP_UPDATED="APP_UPDATED"     // first start of a new APK (versionName + code, previous one)
 }
 object Triggers { const val ALARM="ALARM"; const val BOOT="BOOT"; const val WATCHDOG="WATCHDOG"
                   const val USER="USER"; const val VERIFY="VERIFY"; const val BAND="BAND"; const val BOOST="BOOST" }
@@ -763,6 +767,10 @@ class Converger(
    `lastAppliedState/At`, log (kind chosen from `res.source` + transition reason), enqueue `VerifyWorker`
    (delay 90 s). If empty (the device already matches) and a snapshot exists → `lastAppliedState/At` become
    the desired state, so an old baseline never reads as a manual change later.
+   A pass that sent no command still logs one `CONVERGE` row (SUCCESS "Bez komandi …" or SKIPPED "Preskočeno —
+   ručna promena važi do …") with desired state, observed boiler and next transition — except quiet VERIFY/BAND
+   polls (`scheduling/ConvergeLogRules`). Together with USER_ACTION rows this lets the history server answer
+   "why did it (not) heat?" without access to the phone.
 6. Persist `nextTransitionAt/Reason`; `alarms.armTransition(res.nextTransition.at)` (or cancel if null).
    If `config.maintainMode is Band` and desired is a WEEKLY_PLAN/DAY_OVERRIDE "on" state → also
    `armBandTick(now + band.pollEvery)`, else `cancelBandTick()`.

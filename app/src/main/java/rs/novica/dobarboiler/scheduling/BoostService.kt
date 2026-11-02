@@ -50,6 +50,7 @@ class BoostService : Service() {
         private const val ACTION_START = "rs.novica.dobarboiler.boost.START"
         private const val ACTION_CANCEL = "rs.novica.dobarboiler.boost.CANCEL"
         private const val EXTRA_TARGET_TEMP = "targetTemp"
+        private const val EXTRA_FROM_NOTIFICATION = "fromNotification"
         private val POLL_INTERVAL: Duration = Duration.ofSeconds(90)
         private const val RC_CANCEL = 3101
 
@@ -78,8 +79,9 @@ class BoostService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ACTION_CANCEL -> {
+                val fromNotification = intent.getBooleanExtra(EXTRA_FROM_NOTIFICATION, false)
                 job?.cancel()
-                job = scope.launch { cancelActiveBoost() }
+                job = scope.launch { cancelActiveBoost(fromNotification) }
                 START_NOT_STICKY
             }
             else -> {
@@ -207,14 +209,14 @@ class BoostService : Service() {
         c.converger.converge(Triggers.VERIFY, pollFresh = false)
     }
 
-    private suspend fun cancelActiveBoost() {
+    private suspend fun cancelActiveBoost(fromNotification: Boolean) {
         val c = container
         val active = c.scheduleRepository.activeBoost().first()
         if (active != null) {
             c.scheduleRepository.completeBoost(active.id, "CANCELLED")
             c.actionLog.log(
                 kind = LogKinds.BOOST_COMPLETE, trig = Triggers.USER,
-                detail = "Boost prekinut na zahtev korisnika",
+                detail = "Boost prekinut na zahtev korisnika" + if (fromNotification) " (dugme u notifikaciji)" else "",
                 outcome = LogOutcomes.SUCCESS,
             )
             c.converger.converge(Triggers.BOOST) // revert to planner state
@@ -245,7 +247,7 @@ class BoostService : Service() {
         PendingIntent.getService(
             this,
             RC_CANCEL,
-            Intent(this, BoostService::class.java).setAction(ACTION_CANCEL),
+            Intent(this, BoostService::class.java).setAction(ACTION_CANCEL).putExtra(EXTRA_FROM_NOTIFICATION, true),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 

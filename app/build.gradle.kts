@@ -27,6 +27,10 @@ val gitVersionName = git("log", "-1", "--format=%cd-%h", "--date=format:%Y.%m.%d
 // Without it builds fall back to the machine's own debug key, and the phone will refuse them as an update.
 val signingStoreFile = providers.gradleProperty("dobarboiler.signing.storeFile").orNull
 
+// History-server token baked into release APKs so the phone uploads its log without setup; tools/release-apk.sh
+// passes it from SSM as ORG_GRADLE_PROJECT_dobarboilerHistoryToken. Empty = not configured (manual setup).
+val historyToken = providers.gradleProperty("dobarboilerHistoryToken").orNull.orEmpty()
+
 android {
     namespace = "rs.novica.dobarboiler"
     compileSdk = 35
@@ -38,6 +42,7 @@ android {
         versionCode = gitVersionCode
         versionName = gitVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "HISTORY_TOKEN", "\"" + historyToken.replace("\"", "") + "\"")
     }
 
     signingConfigs {

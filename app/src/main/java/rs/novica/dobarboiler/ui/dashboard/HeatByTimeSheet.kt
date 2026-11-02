@@ -165,8 +165,10 @@ class HeatByTimeViewModel(app: Application, container: AppContainer) :
         if (_state.value.isSaving) return
         _state.update { it.copy(isSaving = true) }
         viewModelScope.launch(Dispatchers.IO) {
+            val s = _state.value
+            val action = "Toplo u ${Fmt.dateTime(eventInstant(), container.zone)}: ${s.targetTemp} °C" +
+                (if (s.eco) ", eco" else "") + ", zadrži ${s.holdMinutes} min"
             try {
-                val s = _state.value
                 container.scheduleRepository.addHeatByTime(
                     eventTime = eventInstant(),
                     targetTemp = s.targetTemp,
@@ -174,11 +176,11 @@ class HeatByTimeViewModel(app: Application, container: AppContainer) :
                     holdMinutes = s.holdMinutes,
                 )
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed(action, t)
                 _state.update { it.copy(isSaving = false) }
                 return@launch
             }
-            convergeUser()
+            convergeUser(action)
             _state.update { it.copy(isSaving = false) }
             withContext(Dispatchers.Main) { onSaved() }
         }

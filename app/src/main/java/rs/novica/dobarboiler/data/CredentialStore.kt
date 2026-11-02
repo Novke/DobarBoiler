@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import rs.novica.dobarboiler.BuildConfig
 import rs.novica.dobarboiler.api.CredentialProvider
 
 /**
@@ -53,8 +54,8 @@ class CredentialStore(context: Context) : CredentialProvider {
      * are independent of the Ariston account and survive a logout.
      */
     fun clear() {
-        val url = historyServerUrl
-        val token = historyServerToken
+        val url = storedHistoryUrl
+        val token = storedHistoryToken
         prefs.edit {
             clear()
             if (url != null) putString(KEY_HISTORY_URL, url)
@@ -62,16 +63,22 @@ class CredentialStore(context: Context) : CredentialProvider {
         }
     }
 
+    private val storedHistoryUrl: String?
+        get() = prefs.getString(KEY_HISTORY_URL, null)?.takeIf { it.isNotBlank() }
+
+    private val storedHistoryToken: String?
+        get() = prefs.getString(KEY_HISTORY_TOKEN, null)?.takeIf { it.isNotBlank() }
+
     /** History server base URL (design §5.2), e.g. `http://novica-dev/boiler/`; null = not configured. */
     var historyServerUrl: String?
-        get() = prefs.getString(KEY_HISTORY_URL, null)?.takeIf { it.isNotBlank() }
+        get() = HistoryServerDefaults.url(storedHistoryUrl, BuildConfig.HISTORY_TOKEN)
         set(value) = prefs.edit {
             if (value.isNullOrBlank()) remove(KEY_HISTORY_URL) else putString(KEY_HISTORY_URL, value.trim())
         }
 
     /** Bearer token for the history server (`BOILER_API_TOKEN`); null = not configured. */
     var historyServerToken: String?
-        get() = prefs.getString(KEY_HISTORY_TOKEN, null)?.takeIf { it.isNotBlank() }
+        get() = HistoryServerDefaults.token(storedHistoryToken, BuildConfig.HISTORY_TOKEN)
         set(value) = prefs.edit {
             if (value.isNullOrBlank()) remove(KEY_HISTORY_TOKEN) else putString(KEY_HISTORY_TOKEN, value.trim())
         }

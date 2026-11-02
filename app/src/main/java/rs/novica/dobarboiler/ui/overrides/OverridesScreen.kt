@@ -157,14 +157,18 @@ class OverridesViewModel(app: Application, container: AppContainer) :
     }
 
     fun cancel(item: OverrideUi) {
+        val action = when (item) {
+            is OverrideUi.Day -> "Otkaži izmenu dana ${Fmt.date(item.date)} (${item.presetName ?: "bez grejanja"})"
+            is OverrideUi.Hbt -> "Otkaži \"Toplo u\" ${item.eventLabel} (${item.temp} °C)"
+        }
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 container.scheduleRepository.cancelOverride(item.id, day = item.isDayReplacement)
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed(action, t)
                 return@launch
             }
-            convergeUser()
+            convergeUser(action)
         }
     }
 }

@@ -13,6 +13,8 @@ import kotlinx.coroutines.launch
 import rs.novica.dobarboiler.App
 import rs.novica.dobarboiler.di.AppContainer
 import rs.novica.dobarboiler.scheduling.ConvergeOutcome
+import rs.novica.dobarboiler.scheduling.LogKinds
+import rs.novica.dobarboiler.scheduling.LogOutcomes
 import rs.novica.dobarboiler.scheduling.Triggers
 
 /**
@@ -47,6 +49,31 @@ abstract class ContainerViewModel(
     /** Human-readable failure details; screens format them with `common_error`. */
     val errors: SharedFlow<String> = _errors
 
+    /**
+     * Every button that changes something lands in `action_log` as USER_ACTION (SPEC §6.2, §9), so the
+     * history server knows what was pressed and when. Never fails the action itself.
+     */
+    protected suspend fun logUserAction(action: String, failure: Throwable? = null) {
+        runCatching {
+            container.actionLog.log(
+                kind = LogKinds.USER_ACTION, trig = Triggers.USER,
+                detail = if (failure == null) action else "$action — greška: ${failure.message ?: failure.javaClass.simpleName}",
+                outcome = if (failure == null) LogOutcomes.SUCCESS else LogOutcomes.FAILED,
+            )
+        }
+    }
+
+    /** Fire-and-forget [logUserAction] for actions that do not converge (or log before they do). */
+    protected fun userAction(action: String, failure: Throwable? = null) {
+        container.appScope.launch { logUserAction(action, failure) }
+    }
+
+    /** A user action that failed: snackbar + FAILED USER_ACTION row. */
+    protected fun userActionFailed(action: String, t: Throwable) {
+        emitError(t)
+        userAction(action, t)
+    }
+
     protected fun emitError(t: Throwable) {
         _errors.tryEmit(t.message ?: t.javaClass.simpleName)
     }
@@ -62,9 +89,10 @@ abstract class ContainerViewModel(
      * not viewModelScope — sheets/dialogs dismiss (clearing the ViewModel) right after
      * saving, and the convergence must not die with it mid-flight.
      */
-    protected fun convergeUser(onDone: (() -> Unit)? = null) {
+    protected fun convergeUser(action: String, onDone: (() -> Unit)? = null) {
         container.appScope.launch {
             try {
+                logUserAction(action)
                 when (val outcome = container.converger.converge(Triggers.USER)) {
                     is ConvergeOutcome.Failed -> emitError(
                         outcome.error.message ?: outcome.error.javaClass.simpleName,

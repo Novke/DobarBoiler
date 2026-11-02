@@ -63,7 +63,12 @@ echo "==> gradim $REF ($(git -C "$BUILD_WT" log -1 --format='%h %s'))"
 
 TASKS=(:app:assembleDebug)
 [[ $RUN_TESTS == 1 ]] && TASKS=(:app:testDebugUnitTest "${TASKS[@]}")
-(cd "$BUILD_WT" && ./gradlew --no-daemon -q "${TASKS[@]}")
+# History-server token baked into the APK (BuildConfig.HISTORY_TOKEN), so the phone uploads its log without setup.
+SERVER_ENV="/data/secrets/dobarboiler-server.env"
+[[ -f "$SERVER_ENV" ]] || ssm-env dobarboiler-server >/dev/null
+HISTORY_TOKEN="$(sed -n 's/^BOILER_API_TOKEN=//p' "$SERVER_ENV")"
+[[ -n "$HISTORY_TOKEN" ]] || die "nema BOILER_API_TOKEN u $SERVER_ENV (SSM /dev/dobarboiler-server/env)"
+(cd "$BUILD_WT" && ORG_GRADLE_PROJECT_dobarboilerHistoryToken="$HISTORY_TOKEN" ./gradlew --no-daemon -q "${TASKS[@]}")
 
 APK="$BUILD_WT/app/build/outputs/apk/debug/app-debug.apk"
 [[ -f "$APK" ]] || die "nema APK-a: $APK"

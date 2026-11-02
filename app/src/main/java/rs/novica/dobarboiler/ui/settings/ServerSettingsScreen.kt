@@ -59,7 +59,7 @@ import rs.novica.dobarboiler.ui.common.containerViewModel
 import java.time.Duration
 import java.time.Instant
 
-const val DEFAULT_HISTORY_URL = "http://novica-dev/boiler/"
+val DEFAULT_HISTORY_URL = rs.novica.dobarboiler.data.HistoryServerDefaults.URL
 
 /** One line describing the upload state; shared by the settings root, health screen and this screen. */
 sealed interface ServerStatus {
@@ -126,6 +126,7 @@ class ServerSettingsViewModel(app: Application, container: AppContainer) : Conta
         container.credentialStore.historyServerToken != null
 
     fun save(url: String, token: String) {
+        userAction("Server istorije: ${url.trim()}" + if (token.isBlank()) " (ugrađeni token)" else " (token unet)")
         container.credentialStore.historyServerUrl = url
         container.credentialStore.historyServerToken = token
         ServerSyncWorker.enqueueSoon(app)

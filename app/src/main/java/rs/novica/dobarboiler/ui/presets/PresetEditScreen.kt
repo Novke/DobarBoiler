@@ -43,6 +43,7 @@ import rs.novica.dobarboiler.di.AppContainer
 import rs.novica.dobarboiler.domain.HeatingWindow
 import rs.novica.dobarboiler.domain.Preset
 import rs.novica.dobarboiler.ui.common.ContainerViewModel
+import rs.novica.dobarboiler.ui.common.Fmt
 import rs.novica.dobarboiler.ui.common.ErrorSnackbars
 import rs.novica.dobarboiler.ui.common.LabeledSwitchRow
 import rs.novica.dobarboiler.ui.common.TempStepper
@@ -128,6 +129,9 @@ class PresetEditViewModel(
         }
         if (s.isSaving) return
         _state.update { it.copy(isSaving = true) }
+        val action = "Preset \"$trimmed\"${presetId?.let { " (#$it)" } ?: " (novi)"}: " +
+            "${s.temp.coerceIn(40, s.maxTemp)} °C" + (if (s.eco) ", eco" else "") +
+            (if (s.windowEnabled) ", prozor ${Fmt.time(s.windowStart)}–${Fmt.time(s.windowEnd)}" else "")
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 container.scheduleRepository.upsertPreset(
@@ -148,10 +152,10 @@ class PresetEditViewModel(
                 _state.update {
                     it.copy(isSaving = false, validationError = PresetValidationError.NAME_INVALID)
                 }
-                emitError(t)
+                userActionFailed(action, t)
                 return@launch
             }
-            convergeUser()
+            convergeUser(action)
             _state.update { it.copy(isSaving = false) }
             withContext(Dispatchers.Main) { onSaved() }
         }
@@ -172,10 +176,10 @@ class PresetEditViewModel(
                     return@launch
                 }
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed("Obriši preset #$id", t)
                 return@launch
             }
-            convergeUser()
+            convergeUser("Obriši preset #$id")
             withContext(Dispatchers.Main) { onDeleted() }
         }
     }

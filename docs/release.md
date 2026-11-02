@@ -19,7 +19,12 @@ What the script does:
 - refuses a `versionCode` that is not newer than the last published one, because Android rejects
   downgrades (`--force` overrides; a real rollback needs an uninstall);
 - publishes to `/data/staging/dobarboiler-apk/` (`index.html`, `latest.json`, last 5 APKs), served by
-  the static preview `boiler-apk`.
+  the static preview `boiler-apk`;
+- bakes the history-server token into the APK (`BuildConfig.HISTORY_TOKEN`, from `BOILER_API_TOKEN` in
+  `/data/secrets/dobarboiler-server.env`, rendered from SSM `/dev/dobarboiler-server/env` when missing, passed as
+  `ORG_GRADLE_PROJECT_dobarboilerHistoryToken`). The phone then uploads its action log to
+  `http://novica-dev/boiler/` with no setup. The token never enters git, but anyone with the APK file has it, and
+  the APK is served on the tailnet only. A token typed in Settings → Server istorije overrides it.
 
 ## Versions
 

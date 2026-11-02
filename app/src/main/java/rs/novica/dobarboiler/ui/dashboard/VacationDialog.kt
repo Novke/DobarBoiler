@@ -123,6 +123,7 @@ class VacationViewModel(app: Application, container: AppContainer) :
         if (_state.value.isSaving) return
         _state.update { it.copy(isSaving = true) }
         viewModelScope.launch(Dispatchers.IO) {
+            var action = "Isključi (odmor)"
             try {
                 val now = Instant.now(container.clock)
                 val zone = container.zone
@@ -141,13 +142,16 @@ class VacationViewModel(app: Application, container: AppContainer) :
                     _state.update { it.copy(isSaving = false) }
                     return@launch
                 }
+                action = "Isključi (odmor) do " +
+                    (resumeAt?.let { Fmt.dateTime(it, zone) } ?: "ručnog povratka") +
+                    " [${_state.value.returnMode}]" + if (_state.value.antiLegOnReturn) ", antibakterijski po povratku" else ""
                 container.scheduleRepository.startVacation(resumeAt, _state.value.antiLegOnReturn)
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed(action, t)
                 _state.update { it.copy(isSaving = false) }
                 return@launch
             }
-            convergeUser()
+            convergeUser(action)
             _state.update { it.copy(isSaving = false) }
             withContext(Dispatchers.Main) { onSaved() }
         }
@@ -159,10 +163,10 @@ class VacationViewModel(app: Application, container: AppContainer) :
             try {
                 container.scheduleRepository.cancelVacation()
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed("Prekini odmor", t)
                 return@launch
             }
-            convergeUser()
+            convergeUser("Prekini odmor")
             withContext(Dispatchers.Main) { onSaved() }
         }
     }

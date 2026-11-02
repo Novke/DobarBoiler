@@ -125,7 +125,7 @@ class DashboardViewModel(app: Application, container: AppContainer) :
                 val snapshot = container.deviceRepository.refresh()
                 // Pull-to-refresh right after flipping the switch back on clears the alert.
                 if (container.linkMonitor.reportOnline(Triggers.USER, snapshot.at)) {
-                    convergeUser()
+                    convergeUser("Osveži — bojler ponovo na mreži")
                 }
             } catch (_: AristonException.DeviceOffline) {
                 container.linkMonitor.reportOffline(Triggers.USER) // the offline card says it all
@@ -148,10 +148,10 @@ class DashboardViewModel(app: Application, container: AppContainer) :
                     it.copy(manualHoldUntil = null, lastAppliedStateJson = null, lastAppliedAt = null)
                 }
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed("Vrati na plan", t)
                 return@launch
             }
-            convergeUser()
+            convergeUser("Vrati na plan")
         }
     }
 
@@ -178,10 +178,10 @@ class DashboardViewModel(app: Application, container: AppContainer) :
                     holdMinutes = Duration.between(now, end).toMinutes().toInt().coerceAtLeast(1),
                 )
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed("Temp na $target °C", t)
                 return@launch
             }
-            convergeUser()
+            convergeUser("Temp na $target °C do sledeće promene plana")
         }
     }
 }
