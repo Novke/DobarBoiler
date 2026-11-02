@@ -858,6 +858,7 @@ call `device.triggerAntilegionella(true)` once and log it. No extra alarm needed
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
 <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/> <!-- in-app update, docs/release.md -->
 ```
 
 `USE_EXACT_ALARM` (API 33+) is install-granted and irrevocable — correct for a sideloaded personal app.

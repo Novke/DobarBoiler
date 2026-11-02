@@ -15,11 +15,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import rs.novica.dobarboiler.BuildConfig
 import rs.novica.dobarboiler.api.AristonApiClient
 import rs.novica.dobarboiler.api.AristonHttpClient
 import rs.novica.dobarboiler.data.ActionLogRepository
 import rs.novica.dobarboiler.data.ServerSync
 import rs.novica.dobarboiler.api.HistoryApiClient
+import rs.novica.dobarboiler.api.ReleaseClient
+import rs.novica.dobarboiler.data.AppUpdater
 import rs.novica.dobarboiler.scheduling.ServerSyncWorker
 import rs.novica.dobarboiler.data.AppDatabase
 import rs.novica.dobarboiler.data.CredentialStore
@@ -84,6 +87,11 @@ class AppContainer(private val app: Application) {
     }
 
     val actionLog: ActionLogRepository by lazy { ActionLogRepository(db) }
+
+    /** In-app updates from http://novica-dev/boiler-apk/ (docs/release.md). */
+    val updater: AppUpdater by lazy {
+        AppUpdater(app, ReleaseClient(json = json), BuildConfig.VERSION_CODE, clock)
+    }
 
     /** History-server upload (design §5.1); null client = server not configured → no-op. */
     val serverSync: ServerSync by lazy {

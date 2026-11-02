@@ -92,6 +92,18 @@ class SettingsStore(context: Context) : SyncStateStore {
         return changed to previous
     }
 
+    /** True once per [versionCode]: the "nova verzija" notification is posted only the first time. */
+    suspend fun markUpdateNotified(versionCode: Int): Boolean {
+        var first = false
+        ds.edit { prefs ->
+            if (prefs[K.NOTIFIED_UPDATE_CODE] != versionCode) {
+                prefs[K.NOTIFIED_UPDATE_CODE] = versionCode
+                first = true
+            }
+        }
+        return first
+    }
+
     // -- History-server sync (design §5.1) ----------------------------------------
 
     val sync: Flow<SyncState> = ds.data.map { it.toSyncState() }
@@ -165,6 +177,7 @@ class SettingsStore(context: Context) : SyncStateStore {
         val SYNC_OK_AT = longPreferencesKey("rt_last_sync_ok_at")
         val SYNC_ERROR = stringPreferencesKey("rt_last_sync_error")
         val LOGGED_APP_VERSION = stringPreferencesKey("rt_logged_app_version")
+        val NOTIFIED_UPDATE_CODE = intPreferencesKey("rt_notified_update_code")
     }
 
     private fun Preferences.toAppSettings(): AppSettings {

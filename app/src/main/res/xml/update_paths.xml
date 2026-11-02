@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the update APKs that AppUpdater downloads; nothing else is shared. -->
+<paths>
+    <cache-path name="updates" path="updates/" />
+</paths>

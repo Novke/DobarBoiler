@@ -9,7 +9,7 @@ plugins {
 }
 
 // Version from git, so every APK installs over the previous one: versionCode = minutes between
-// 2026-01-01 UTC and the HEAD commit time (monotonic along master), versionName = commit date + hash.
+// 2026-01-01 UTC and the HEAD commit time (monotonic along master).
 fun git(vararg args: String): String? = runCatching {
     providers.exec {
         commandLine("git", *args)
@@ -19,8 +19,10 @@ fun git(vararg args: String): String? = runCatching {
 
 val gitCommitEpoch = git("log", "-1", "--format=%ct")?.toLongOrNull()
 val gitVersionCode = gitCommitEpoch?.let { ((it - 1_767_225_600L) / 60).toInt() } ?: 1
-val gitVersionName = git("log", "-1", "--format=%cd-%h", "--date=format:%Y.%m.%d")
-    ?.let { if (git("status", "--porcelain", "--untracked-files=no") != null) "$it-dirty" else it }
+// tools/release-apk.sh passes the release version (X.Y.Z, docs/release.md); local builds keep the date + hash.
+val gitVersionName = providers.gradleProperty("dobarboilerVersionName").orNull
+    ?: git("log", "-1", "--format=%cd-%h", "--date=format:%Y.%m.%d")
+        ?.let { if (git("status", "--porcelain", "--untracked-files=no") != null) "$it-dirty" else it }
     ?: "dev"
 
 // Stable signing key, configured outside the repo in ~/.gradle/gradle.properties (see tools/release-apk.sh).
