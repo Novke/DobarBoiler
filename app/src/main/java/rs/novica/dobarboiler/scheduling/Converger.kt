@@ -50,6 +50,8 @@ object LogKinds {
     const val REASSERT = "REASSERT"; const val VERIFY = "VERIFY_POLL"; const val COMMAND_FAILED = "COMMAND_FAILED"
     const val DRIFT = "DRIFT_CORRECTED"; const val CONVERGE = "CONVERGE"
     const val DEVICE_OFFLINE = "DEVICE_OFFLINE"; const val DEVICE_ONLINE = "DEVICE_ONLINE" // §7.5
+    const val USER_ACTION = "USER_ACTION" // a button in the app (what, with which values)
+    const val APP_UPDATED = "APP_UPDATED" // first start of a new APK version
 }
 
 /** `action_log.trig` values (SPEC §6.2 — frozen). */
@@ -152,7 +154,8 @@ class Converger(
         // Scheduled transitions outrank manual holds by definition (§7.4). Boost start/end
         // are explicit app-driven transitions and must assert the same way — otherwise a
         // mid-boost hold would silently block the boost revert (boiler left ON for hours).
-        if ((trigger == Triggers.ALARM || trigger == Triggers.BOOST) && preRuntime.manualHoldUntil != null) {
+        val assertive = ManualChangeRules.isAssertive(trigger)
+        if (assertive && preRuntime.manualHoldUntil != null) {
             settings.updateRuntime { it.copy(manualHoldUntil = null) }
         }
 
@@ -192,13 +195,11 @@ class Converger(
         var skipCommands = runtime.manualHoldUntil?.let { now.isBefore(it) } == true
         var manualDetectedNow = false
 
-        // 4. Manual-change detection (§7.4).
-        if (!skipCommands) {
+        // 4. Manual-change detection (§7.4). Never on an assertive trigger: it would re-detect
+        // the change the hold was for and re-arm the hold at every transition.
+        if (!skipCommands && !assertive) {
             val applied = AppliedStateCodec.decode(runtime.lastAppliedStateJson)
-            val appliedAt = runtime.lastAppliedAt
-            val isExternal = applied != null && appliedAt != null && snapshot != null &&
-                snapshot.at.isAfter(appliedAt.plus(MANUAL_GRACE)) &&
-                !AppliedStateCodec.matches(applied, snapshot)
+            val isExternal = ManualChangeRules.isExternal(applied, runtime.lastAppliedAt, snapshot)
             if (isExternal) {
                 when (inputs.config.manualChangePolicy) {
                     ManualChangePolicy.RESPECT_UNTIL_NEXT_TRANSITION -> {
@@ -260,6 +261,13 @@ class Converger(
                 notifyScheduledEvent(trigger, res, firedReason, now)
                 checkHbtLateStart(now, inputs, res, snapshot, trigger)
                 if (trigger != Triggers.VERIFY) enqueueVerify()
+            } else if (snapshot != null) {
+                // The device already matches the plan: that is the new baseline. An older one
+                // (e.g. the boost's "on") would read as a manual change on the next poll.
+                val appliedJson = AppliedStateCodec.encode(res.desired)
+                if (runtime.lastAppliedStateJson != appliedJson) {
+                    settings.updateRuntime { it.copy(lastAppliedStateJson = appliedJson, lastAppliedAt = now) }
+                }
             }
 
             // §6.6 — anti-legionella hygiene cycle on return from a >7-day vacation.
@@ -270,6 +278,23 @@ class Converger(
 
         // 6 + 7. Persist next transition, arm exactly one transition alarm, band/mid-window tick.
         armAlarms(now, res, inputs, trigger)
+
+        // A pass that sent nothing still explains itself (the "why did it not heat?" evidence).
+        if (commandsSent == 0 && !manualDetectedNow && ConvergeLogRules.logsQuietPass(trigger, skipCommands)) {
+            val observed = snapshot?.let { describeSnapshot(it) } ?: "stanje nepoznato"
+            val next = res.nextTransition?.let { "${it.reason} u ${timeLabel(it.at, now)}" } ?: "—"
+            log.log(
+                kind = LogKinds.CONVERGE, trig = trigger,
+                detail = if (skipCommands) {
+                    "Preskočeno — ručna promena važi do ${timeLabel(runtime.manualHoldUntil, now)}; " +
+                        "plan: ${describeDesired(res)}; bojler: $observed; sledeće: $next"
+                } else {
+                    "Bez komandi — bojler već odgovara planu: ${describeDesired(res)}; bojler: $observed; sledeće: $next"
+                },
+                // No stateJson: the history server reads it as "the app sent this" when attributing changes.
+                outcome = if (skipCommands) LogOutcomes.SKIPPED else LogOutcomes.SUCCESS,
+            )
+        }
 
         return if (skipCommands) {
             ConvergeOutcome.Skipped(if (manualDetectedNow) "manual change detected" else "manual hold active")
@@ -471,9 +496,6 @@ class Converger(
     }
 
     private companion object {
-        /** Grace for the slow device bus before a differing snapshot counts as external (§6.2 step 4). */
-        val MANUAL_GRACE: Duration = Duration.ofMinutes(3)
-
         /** Don't bother arming a mid-window check closer than this to `now`. */
         val MIN_MID_WINDOW_LEAD: Duration = Duration.ofMinutes(15)
     }

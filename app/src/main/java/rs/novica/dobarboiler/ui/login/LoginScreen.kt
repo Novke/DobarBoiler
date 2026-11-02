@@ -36,6 +36,7 @@ import rs.novica.dobarboiler.api.VelisPlant
 import rs.novica.dobarboiler.di.AppContainer
 import rs.novica.dobarboiler.domain.HeatingWindow
 import rs.novica.dobarboiler.ui.common.ContainerViewModel
+import rs.novica.dobarboiler.ui.common.Fmt
 import rs.novica.dobarboiler.ui.common.containerViewModel
 import java.time.LocalTime
 
@@ -84,6 +85,7 @@ class LoginViewModel(app: Application, container: AppContainer) : ContainerViewM
                     }
                 }
             } catch (t: Throwable) {
+                logUserAction("Prijava na Ariston", t)
                 _state.update { it.copy(isLoading = false, error = true) }
             }
         }
@@ -97,6 +99,7 @@ class LoginViewModel(app: Application, container: AppContainer) : ContainerViewM
     private suspend fun selectDeviceInternal(plant: VelisPlant) {
         container.credentialStore.gwId = plant.gw
         container.credentialStore.deviceName = plant.name
+        logUserAction("Izabran uređaj ${plant.name}")
         // Best-effort: read live plantSettings so maxSetpointGuard is seeded (SPEC R14).
         runCatching { container.deviceRepository.plantSettings() }
         _state.update { it.copy(isLoading = false, step = OnboardingStep.WINDOW) }
@@ -108,6 +111,7 @@ class LoginViewModel(app: Application, container: AppContainer) : ContainerViewM
     fun confirmWindow() {
         val s = _state.value
         viewModelScope.launch(Dispatchers.IO) {
+            logUserAction("Podrazumevani prozor ${Fmt.time(s.windowStart)}–${Fmt.time(s.windowEnd)} (uvodno podešavanje)")
             container.settings.update { settings ->
                 settings.copy(
                     engineConfig = settings.engineConfig.copy(
@@ -121,7 +125,7 @@ class LoginViewModel(app: Application, container: AppContainer) : ContainerViewM
 
     /** Final onboarding step done → first convergence (arms the transition alarm). */
     fun finish() {
-        convergeUser()
+        convergeUser("Uvodno podešavanje završeno")
     }
 }
 

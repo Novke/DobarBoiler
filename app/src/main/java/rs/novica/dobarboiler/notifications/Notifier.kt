@@ -168,7 +168,12 @@ class Notifier(private val context: Context) {
      * `BoostService` uses it for `startForeground(3001, ...)` and re-posts it on every 90 s poll.
      * Silent + only-alert-once so the periodic updates never make a sound (R11 "LOW ongoing").
      */
-    fun boostOngoing(currentTemp: Double, target: Int, etaMinutes: Long?): Notification {
+    fun boostOngoing(
+        currentTemp: Double,
+        target: Int,
+        etaMinutes: Long?,
+        cancelIntent: PendingIntent? = null,
+    ): Notification {
         val text = context.getString(
             R.string.boost_notif,
             currentTemp.roundToInt(),
@@ -184,6 +189,11 @@ class Notifier(private val context: Context) {
             .setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .apply {
+                if (cancelIntent != null) {
+                    addAction(0, context.getString(R.string.action_cancel_boost), cancelIntent)
+                }
+            }
             .build()
     }
 

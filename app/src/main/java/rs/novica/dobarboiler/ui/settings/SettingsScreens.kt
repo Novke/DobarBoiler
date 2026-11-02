@@ -166,29 +166,31 @@ class SettingsViewModel(app: Application, container: AppContainer) :
         }
     }
 
-    private fun updateConfig(transform: (EngineConfig) -> EngineConfig) {
+    private fun updateConfig(action: String, transform: (EngineConfig) -> EngineConfig) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 container.settings.update { it.copy(engineConfig = transform(it.engineConfig)) }
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed("Podešavanje: $action", t)
                 return@launch
             }
-            convergeUser()
+            convergeUser("Podešavanje: $action")
         }
     }
 
     fun setWindow(start: LocalTime, end: LocalTime) =
-        updateConfig { it.copy(defaultWindow = HeatingWindow(start, end)) }
+        updateConfig("podrazumevani prozor ${Fmt.time(start)}–${Fmt.time(end)}") {
+            it.copy(defaultWindow = HeatingWindow(start, end))
+        }
 
     fun setOutsideWindow(behavior: OutsideWindowBehavior) =
-        updateConfig { it.copy(outsideWindow = behavior) }
+        updateConfig("van prozora = $behavior") { it.copy(outsideWindow = behavior) }
 
     fun setKeepWarmTemp(temp: Int) =
-        updateConfig { it.copy(keepWarmTemp = temp.coerceIn(40, 75)) }
+        updateConfig("održavanje toplote ${temp.coerceIn(40, 75)} °C") { it.copy(keepWarmTemp = temp.coerceIn(40, 75)) }
 
     fun setMidWindowCheck(enabled: Boolean) =
-        updateConfig { it.copy(midWindowCheck = enabled) }
+        updateConfig("provera usred prozora = $enabled") { it.copy(midWindowCheck = enabled) }
 
     /** Band-mode write keeping the `stopAt >= restartAt + 2` invariant (SPEC §3.3). */
     fun setBand(enabled: Boolean, stopAt: Int, restartAt: Int, pollMinutes: Int) {
@@ -198,7 +200,7 @@ class SettingsViewModel(app: Application, container: AppContainer) :
         _state.update {
             it.copy(bandEnabled = enabled, stopAt = stop, restartAt = restart, bandPollMinutes = poll)
         }
-        updateConfig {
+        updateConfig("napredno održavanje = $enabled ($restart–$stop °C, na $poll min)") {
             it.copy(
                 maintainMode = if (enabled) {
                     MaintainMode.Band(BandConfig(stop, restart, Duration.ofMinutes(poll.toLong())))
@@ -209,30 +211,30 @@ class SettingsViewModel(app: Application, container: AppContainer) :
         }
     }
 
-    fun setHeatRate(perHour: Int) = updateConfig {
+    fun setHeatRate(perHour: Int) = updateConfig("brzina grejanja $perHour °C/h") {
         it.copy(heatingRate = it.heatingRate.copy(ratePerHourC = perHour.coerceIn(1, 50).toDouble()))
     }
 
-    fun setSafetyMargin(percent: Int) = updateConfig {
+    fun setSafetyMargin(percent: Int) = updateConfig("rezerva $percent %") {
         it.copy(heatingRate = it.heatingRate.copy(safetyMarginPercent = percent.coerceIn(0, 50)))
     }
 
-    fun setBoostMaxHours(hours: Int) = updateConfig {
+    fun setBoostMaxHours(hours: Int) = updateConfig("najduži boost $hours h") {
         it.copy(boostMaxDuration = Duration.ofHours(hours.coerceIn(1, 6).toLong()))
     }
 
     fun setManualPolicy(policy: ManualChangePolicy) =
-        updateConfig { it.copy(manualChangePolicy = policy) }
+        updateConfig("ručna promena = $policy") { it.copy(manualChangePolicy = policy) }
 
     fun setReassertMinutes(minutes: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 container.settings.update { it.copy(reassertAfterMinutes = minutes.coerceIn(5, 120)) }
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed("Podešavanje: vrati posle $minutes min", t)
                 return@launch
             }
-            convergeUser()
+            convergeUser("Podešavanje: vrati posle $minutes min")
         }
     }
 
@@ -242,15 +244,16 @@ class SettingsViewModel(app: Application, container: AppContainer) :
             try {
                 container.deviceRepository.applyMaxSetpoint(temp.coerceIn(40, 75))
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed("Max temperatura uređaja ${temp.coerceIn(40, 75)} °C", t)
                 return@launch
             }
-            convergeUser()
+            convergeUser("Max temperatura uređaja ${temp.coerceIn(40, 75)} °C")
         }
     }
 
     fun logout(onDone: () -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
+            logUserAction("Odjava (alarmi otkazani)")
             try {
                 container.alarmScheduler.cancelTransition()
                 container.alarmScheduler.cancelBandTick()

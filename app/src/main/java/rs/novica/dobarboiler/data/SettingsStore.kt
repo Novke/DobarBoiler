@@ -78,6 +78,20 @@ class SettingsStore(context: Context) : SyncStateStore {
         ds.edit { prefs -> prefs.write(transform(prefs.toRuntimeState())) }
     }
 
+    /** Records [version] as the running build; returns whether it changed and the build recorded before (null = first start). */
+    suspend fun swapLoggedAppVersion(version: String): Pair<Boolean, String?> {
+        var changed = false
+        var previous: String? = null
+        ds.edit { prefs ->
+            previous = prefs[K.LOGGED_APP_VERSION]
+            if (previous != version) {
+                changed = true
+                prefs[K.LOGGED_APP_VERSION] = version
+            }
+        }
+        return changed to previous
+    }
+
     // -- History-server sync (design §5.1) ----------------------------------------
 
     val sync: Flow<SyncState> = ds.data.map { it.toSyncState() }
@@ -150,6 +164,7 @@ class SettingsStore(context: Context) : SyncStateStore {
         val SYNC_INTENT_UPLOADED_JSON = stringPreferencesKey("rt_last_intent_uploaded_json")
         val SYNC_OK_AT = longPreferencesKey("rt_last_sync_ok_at")
         val SYNC_ERROR = stringPreferencesKey("rt_last_sync_error")
+        val LOGGED_APP_VERSION = stringPreferencesKey("rt_logged_app_version")
     }
 
     private fun Preferences.toAppSettings(): AppSettings {

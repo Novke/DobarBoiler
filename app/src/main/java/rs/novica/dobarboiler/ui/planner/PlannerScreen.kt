@@ -112,10 +112,10 @@ class PlannerViewModel(app: Application, container: AppContainer) :
             try {
                 container.scheduleRepository.assign(dow, presetId)
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed("Plan: $dow → ${presetLabel(presetId)}", t)
                 return@launch
             }
-            convergeUser()
+            convergeUser("Plan: $dow → ${presetLabel(presetId)}")
         }
     }
 
@@ -125,12 +125,16 @@ class PlannerViewModel(app: Application, container: AppContainer) :
             try {
                 days.forEach { container.scheduleRepository.assign(it, presetId) }
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed("Plan: ${days.joinToString()} → ${presetLabel(presetId)}", t)
                 return@launch
             }
-            convergeUser()
+            convergeUser("Plan: ${days.joinToString()} → ${presetLabel(presetId)}")
         }
     }
+
+    private fun presetLabel(presetId: Long?): String =
+        presetId?.let { id -> _state.value.presets.firstOrNull { it.id == id }?.let { "${it.name} (#$id)" } ?: "preset #$id" }
+            ?: "bez grejanja"
 }
 
 /** Route `planner` (SPEC §8): week view with per-day preset assignment + bulk apply buttons. */

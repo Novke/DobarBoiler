@@ -115,17 +115,19 @@ class DayOverrideViewModel(app: Application, container: AppContainer) :
 
         _state.update { it.copy(isSaving = true) }
         viewModelScope.launch(Dispatchers.IO) {
+            val presetId = (replacement as? ReplacementChoice.WithPreset)?.presetId
+            val action = "Izmena dana ${dates.joinToString { Fmt.date(it) }}: " +
+                (presetId?.let { "preset #$it" } ?: "bez grejanja")
             try {
-                val presetId = (replacement as? ReplacementChoice.WithPreset)?.presetId
                 dates.forEach { date ->
                     container.scheduleRepository.upsertDayOverride(date, presetId)
                 }
             } catch (t: Throwable) {
-                emitError(t)
+                userActionFailed(action, t)
                 _state.update { it.copy(isSaving = false) }
                 return@launch
             }
-            convergeUser()
+            convergeUser(action)
             _state.update { it.copy(isSaving = false) }
             withContext(Dispatchers.Main) { onSaved() }
         }

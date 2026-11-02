@@ -1,5 +1,6 @@
 package rs.novica.dobarboiler.scheduling
 
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -49,7 +50,9 @@ class BoostService : Service() {
         private const val ACTION_START = "rs.novica.dobarboiler.boost.START"
         private const val ACTION_CANCEL = "rs.novica.dobarboiler.boost.CANCEL"
         private const val EXTRA_TARGET_TEMP = "targetTemp"
+        private const val EXTRA_FROM_NOTIFICATION = "fromNotification"
         private val POLL_INTERVAL: Duration = Duration.ofSeconds(90)
+        private const val RC_CANCEL = 3101
 
         /** Called from foreground UI only (SPEC §6.5). */
         fun start(context: Context, targetTemp: Int) {
@@ -76,8 +79,9 @@ class BoostService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ACTION_CANCEL -> {
+                val fromNotification = intent.getBooleanExtra(EXTRA_FROM_NOTIFICATION, false)
                 job?.cancel()
-                job = scope.launch { cancelActiveBoost() }
+                job = scope.launch { cancelActiveBoost(fromNotification) }
                 START_NOT_STICKY
             }
             else -> {
@@ -139,6 +143,12 @@ class BoostService : Service() {
 
             val snapshot = runCatching { c.deviceRepository.refresh(Duration.ZERO) }.getOrNull()
             if (snapshot != null) {
+                // No baseline (e.g. cleared after an outage) → no detection either; the timeout ends the boost.
+                val appliedAt = c.settings.runtimeSnapshot().lastAppliedAt
+                if (appliedAt != null && ManualChangeRules.boostSwitchedOffByHand(snapshot, appliedAt)) {
+                    completeSwitchedOffByHand(session)
+                    break
+                }
                 if (isComplete(snapshot, session.targetTemp)) {
                     completeDone(session, snapshot)
                     break
@@ -182,14 +192,31 @@ class BoostService : Service() {
         )
     }
 
-    private suspend fun cancelActiveBoost() {
+    /**
+     * Someone switched the boiler off during the boost: that ends the boost. The converge is
+     * deliberately not BOOST (which would assert the plan and could switch the boiler back on):
+     * it detects the manual change and respects it until the next transition (§6.5, §7.4).
+     */
+    private suspend fun completeSwitchedOffByHand(session: BoostSession) {
+        val c = container
+        c.scheduleRepository.completeBoost(session.id, "CANCELLED")
+        c.alarmScheduler.cancelBoostTimeout()
+        c.actionLog.log(
+            kind = LogKinds.BOOST_COMPLETE, trig = Triggers.BOOST,
+            detail = "Boost prekinut — bojler isključen ručno",
+            outcome = LogOutcomes.SUCCESS,
+        )
+        c.converger.converge(Triggers.VERIFY, pollFresh = false)
+    }
+
+    private suspend fun cancelActiveBoost(fromNotification: Boolean) {
         val c = container
         val active = c.scheduleRepository.activeBoost().first()
         if (active != null) {
             c.scheduleRepository.completeBoost(active.id, "CANCELLED")
             c.actionLog.log(
                 kind = LogKinds.BOOST_COMPLETE, trig = Triggers.USER,
-                detail = "Boost prekinut na zahtev korisnika",
+                detail = "Boost prekinut na zahtev korisnika" + if (fromNotification) " (dugme u notifikaciji)" else "",
                 outcome = LogOutcomes.SUCCESS,
             )
             c.converger.converge(Triggers.BOOST) // revert to planner state
@@ -203,15 +230,26 @@ class BoostService : Service() {
     private fun goForeground(target: Int?) {
         val c = container
         val temp = c.deviceRepository.snapshot.value?.temp ?: 0.0
-        val notification = c.notifier.boostOngoing(temp, target ?: temp.roundToInt(), null)
+        val notification = c.notifier.boostOngoing(temp, target ?: temp.roundToInt(), null, cancelPendingIntent())
         startForegroundCompat(notification)
     }
 
     private suspend fun updateNotification(snapshot: DeviceSnapshot, session: BoostSession) {
         val cfg = container.settings.settingsSnapshot().engineConfig
         val eta = etaMinutes(snapshot, session.targetTemp, cfg)
-        startForegroundCompat(container.notifier.boostOngoing(snapshot.temp, session.targetTemp, eta))
+        startForegroundCompat(
+            container.notifier.boostOngoing(snapshot.temp, session.targetTemp, eta, cancelPendingIntent()),
+        )
     }
+
+    /** "Prekini boost" action on the ongoing notification — same path as the sheet's button. */
+    private fun cancelPendingIntent(): PendingIntent =
+        PendingIntent.getService(
+            this,
+            RC_CANCEL,
+            Intent(this, BoostService::class.java).setAction(ACTION_CANCEL).putExtra(EXTRA_FROM_NOTIFICATION, true),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     private fun startForegroundCompat(notification: android.app.Notification) {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
