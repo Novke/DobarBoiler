@@ -56,6 +56,46 @@ class AristonHttpClientTest {
         server.shutdown()
     }
 
+    // ------------------------------------------------------------------ plants
+
+    /** Shape of a real `velis/plants` record (2026-11-10): `lnk` is a number, not a boolean. */
+    private val plantsJson = """
+        [{
+          "gw": "ABCDEF012345", "sn": "0724222W0160", "name": "Kupatilo",
+          "sys": 4, "wheType": 8, "wheModelType": 27, "lnk": 1,
+          "gwFwVer": {"FwVer1": "03.02.00", "FwVer2": "014.115.27"},
+          "loc": {"country": "RS", "lat": 44.7, "lng": 20.5},
+          "mqttApiVersion": 8, "isOffline48H": false
+        }]
+    """.trimIndent()
+
+    @Test
+    fun `listVelisPlants accepts lnk as a number`() = runBlocking {
+        creds.storeToken("tok")
+        server.enqueue(MockResponse().setResponseCode(200).setBody(plantsJson))
+
+        val plants = client.listVelisPlants()
+
+        assertEquals(1, plants.size)
+        assertEquals("ABCDEF012345", plants[0].gw)
+        assertEquals(4, plants[0].sys)
+        assertTrue(plants[0].online)
+    }
+
+    @Test
+    fun `listVelisPlants maps lnk 0 and false to offline, true to online`() = runBlocking {
+        creds.storeToken("tok")
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """[{"gw":"A","sys":4,"lnk":0},{"gw":"B","sys":4,"lnk":false},{"gw":"C","sys":4,"lnk":true},{"gw":"D","sys":4}]""",
+            ),
+        )
+
+        val online = client.listVelisPlants().map { it.online }
+
+        assertEquals(listOf(false, false, true, false), online)
+    }
+
     // ------------------------------------------------------------------ login
 
     @Test

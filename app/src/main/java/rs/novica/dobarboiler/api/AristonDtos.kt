@@ -1,7 +1,17 @@
 package rs.novica.dobarboiler.api
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
 
 /**
  * Wire DTOs for the Ariston cloud API (docs/protocol.md). All are decoded with a
@@ -19,6 +29,20 @@ data class LoginResponse(
     @SerialName("token") val token: String,
 )
 
+/** Decodes a JSON boolean or number (non-zero = true); anything else is false. Encodes a plain boolean. */
+object FlexibleBooleanSerializer : KSerializer<Boolean> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("rs.novica.dobarboiler.FlexibleBoolean", PrimitiveKind.BOOLEAN)
+
+    override fun deserialize(decoder: Decoder): Boolean {
+        val element = (decoder as? JsonDecoder)?.decodeJsonElement() ?: return decoder.decodeBoolean()
+        val primitive = element as? JsonPrimitive ?: return false
+        return primitive.booleanOrNull ?: primitive.doubleOrNull?.let { it != 0.0 } ?: false
+    }
+
+    override fun serialize(encoder: Encoder, value: Boolean) = encoder.encodeBoolean(value)
+}
+
 @Serializable
 data class VelisPlantDto(
     @SerialName("gw") val gw: String,
@@ -26,7 +50,8 @@ data class VelisPlantDto(
     @SerialName("sn") val sn: String? = null,
     @SerialName("sys") val sys: Int = 0,
     @SerialName("wheType") val wheType: Int = 0,
-    @SerialName("lnk") val lnk: Boolean = false,
+    // docs/protocol.md had `true`/`false`; the live cloud sends `1`/`0` (2026-11-10). Accept both.
+    @SerialName("lnk") @Serializable(with = FlexibleBooleanSerializer::class) val lnk: Boolean = false,
 ) {
     fun toModel(): VelisPlant = VelisPlant(gw = gw, name = name, sn = sn, sys = sys, wheType = wheType, online = lnk)
 }
