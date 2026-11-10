@@ -100,7 +100,7 @@ Full URL: https://www.ariston-net.remotethermo.com/api/v2/velis/plants
     "sys": 4,
     "wheType": 8,
     "wheModelType": 1,
-    "lnk": true,
+    "lnk": 1,
     "isOffline48H": false,
     "loc": "sr-RS",
     "utcOft": 2,
@@ -127,7 +127,7 @@ Field semantics:
 | `sys` | System type: `1`=GALILEO1, `2`=GALILEO2, `3`=GALEVO, `4`=**VELIS**, `5`=BSB. |
 | `wheType` | Water-heater type: `1`=Evo, `2`=LydosHybrid, `3`=Lydos, `4`=NuosSplit, `5`=Andris2, `6`=Evo2, `7`=Lux2, `8`=**Lux**. |
 | `wheModelType` | Model sub-type int. |
-| `lnk` | Gateway link/online flag. |
+| `lnk` | Gateway link/online flag. Was `true`/`false`, the live cloud sends `1`/`0` (seen 2026-11-10); decode both (`FlexibleBooleanSerializer`). |
 | `isOffline48H` | True if unreachable for 48 h. |
 
 **Select your device:** filter `sys == 4 && wheType == 8`, take its `gw`.
