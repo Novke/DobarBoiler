@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreTime
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
@@ -136,6 +137,7 @@ fun DashboardScreen(
                 ActiveSourceCard(
                     state = state,
                     onReturnToPlan = vm::returnToPlan,
+                    onCancelBoost = vm::cancelBoost,
                     onClick = {
                         when (state.activeSource) {
                             StateSource.BOOST -> onOpenBoost()
@@ -353,6 +355,7 @@ private fun UpdatedAgoRow(
 fun ActiveSourceCard(
     state: DashboardUiState,
     onReturnToPlan: () -> Unit,
+    onCancelBoost: () -> Unit,
     onClick: () -> Unit,
 ) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
@@ -364,6 +367,24 @@ fun ActiveSourceCard(
                 )
                 TextButton(onClick = onReturnToPlan) {
                     Text(stringResource(R.string.action_return_to_plan))
+                }
+            } else if (state.source is SourceUi.Boost) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        sourceText(state.source),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onCancelBoost) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_cancel_boost))
+                    }
+                }
+                state.boostRevert?.let { revert ->
+                    Text(
+                        stringResource(R.string.source_boost_revert, sourceText(revert)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             } else {
                 Text(sourceText(state.source), style = MaterialTheme.typography.titleMedium)

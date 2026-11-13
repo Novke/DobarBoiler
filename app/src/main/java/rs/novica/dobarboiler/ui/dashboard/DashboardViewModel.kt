@@ -14,6 +14,7 @@ import rs.novica.dobarboiler.di.AppContainer
 import rs.novica.dobarboiler.domain.DeviceLink
 import rs.novica.dobarboiler.domain.DeviceSnapshot
 import rs.novica.dobarboiler.domain.StateSource
+import rs.novica.dobarboiler.scheduling.BoostService
 import rs.novica.dobarboiler.scheduling.Triggers
 import rs.novica.dobarboiler.ui.common.ContainerViewModel
 import rs.novica.dobarboiler.ui.common.Fmt
@@ -43,6 +44,8 @@ data class DashboardUiState(
     val manualHold: Boolean = false,
     val manualHoldUntilLabel: String? = null,
     val boostActive: Boolean = false,
+    /** While a boost runs: the planner state it returns to when it ends or is cancelled. */
+    val boostRevert: SourceUi? = null,
     /** Starting point for the quick temp-bump stepper. */
     val currentReqTemp: Int = 55,
     /** Upper clamp for user-selectable temperatures (maxSetpointGuard-aware). */
@@ -106,6 +109,10 @@ class DashboardViewModel(app: Application, container: AppContainer) :
                     manualHold = manualHoldUntil != null,
                     manualHoldUntilLabel = manualHoldUntil?.let { u -> Fmt.time(u, zone) },
                     boostActive = inputs.boost != null,
+                    boostRevert = inputs.boost?.let {
+                        val noBoost = inputs.copy(boost = null)
+                        sourceUiFrom(container.engine.resolve(now, noBoost), noBoost, now, zone, container.engine)
+                    },
                     currentReqTemp = snapshot?.reqTemp?.roundToInt()
                         ?: resolution.desired.targetTemp ?: 55,
                     maxSelectableTemp = minOf(75, inputs.config.maxSetpointGuard ?: 75),
@@ -135,6 +142,16 @@ class DashboardViewModel(app: Application, container: AppContainer) :
             _state.update { it.copy(isRefreshing = false) }
             recompute()
         }
+    }
+
+    /**
+     * The X on the "Boost … u toku" card: same path as the sheet's "Prekini boost" — the
+     * service completes the session as CANCELLED and converges back onto the planner state
+     * (e.g. off outside the night window), the USER converge is belt-and-braces.
+     */
+    fun cancelBoost() {
+        BoostService.cancel(app)
+        convergeUser("Prekini boost (X na kartici)")
     }
 
     /**
