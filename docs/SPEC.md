@@ -829,7 +829,7 @@ Flow: `startBoost` row (timeout = now + `boostMaxDuration`) → `armBoostTimeout
 `rmTm` shown when plausible). Completion when `temp >= target - 0.5` OR
 (`!heatReq && reqTemp >= target && temp >= target - 2`): `completeBoost(DONE)` → `converge(Triggers.BOOST)`
 (reverts to planner state) → `boostDone` notification → `cancelBoostTimeout()` → `stopSelf()`.
-User cancel ("Prekini boost" in the boost sheet or the action on notification 3001) → `completeBoost(CANCELLED)`
+User cancel ("Prekini boost" in the boost sheet, the X on the dashboard's `ActiveSourceCard`, or the action on notification 3001) → `completeBoost(CANCELLED)`
 → same revert path. Boiler switched off by hand during a boost (snapshot `on=false` later than
 `lastAppliedAt + 3 min`) → `completeBoost(CANCELLED)` → `converge(Triggers.VERIFY, pollFresh = false)`, which
 detects the manual change and holds it until the next transition (the boiler stays off, the plan resumes at
@@ -942,7 +942,7 @@ snackbar on failure).
 Dashboard composition (child composables, state hoisted from `DashboardViewModel`):
 `PermissionsHealthCard` (only when issues; errorContainer), `TempDialSection` (big circle: `temp` large,
 `/ reqTemp` below, ring = progress 40..75; label Greje/Održava/Isključen from `heatReq`/`on`; boost tint),
-chips row (`avShw` tuševa, `rmTm` "još HH:mm", Eco badge), `ActiveSourceCard` (one line: why + what's next;
+chips row (`avShw` tuševa, `rmTm` "još HH:mm", Eco badge), `ActiveSourceCard` (one line: why + what's next; during a boost an X that cancels it, same path as "Prekini boost", plus "Posle boosta: …" = the planner state it reverts to;
 tap navigates to the source), `QuickActionsRow` (Boost / Ugasi / Temp stepper = mini HBT-style bump valid
 until next transition — implemented as `DayReplacement`-free direct temp override: a `HeatByTime` with
 `eventTime = nextTransition.at`, `holdMinutes = 0`, eco untouched), `+ Jednokratno…` entry.

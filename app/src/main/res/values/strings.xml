@@ -24,6 +24,7 @@
     <string name="source_vacation">Odmor do %1$s — isključen</string>
     <string name="source_vacation_manual">Odmor — isključen dok ga ne upališ</string>
     <string name="source_boost">Boost do %1$d °C — u toku</string>
+    <string name="source_boost_revert">Posle boosta: %1$s</string>
     <string name="source_manual">Ručna promena — važi do %1$s</string>
     <string name="source_keep_warm">Održavanje %1$d °C (van prozora)</string>
     <string name="source_off">Isključen do sledećeg prozora</string>
