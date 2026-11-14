@@ -18,6 +18,14 @@ Android app, which replaces the official Ariston NET app. Novica writes in Serbi
   `.claude/settings.local.json`. Do not source the env file in other commands. Every command sent changes a real
   boiler in a real home — read state freely, ask before switching power/temperature/modes.
 
+## User stories (since 2026-10-29)
+
+When Novica complains about the app or the boiler ("žalim se", "zapiši ovo"), record the complaint as a user story
+in `.work/user-stories/YYYY-MM-DD-<slug>.md` and **do not implement it** unless asked. Format, statuses and the
+grouping step live in `.work/user-stories/README.md`. Capture evidence while it is fresh (history-server
+`boiler_*` tools, code paths). Later, on request, agents group `status: new` stories into
+`.work/features/<slug>.md` and implement features one PR at a time.
+
 ## Device facts (verified live, `docs/api-findings.md`)
 
 Velis Tech Wifi 80 reports as `SystemType 4` (VELIS), **`WheType 8` = Lux** (not Evo2), so every device path
